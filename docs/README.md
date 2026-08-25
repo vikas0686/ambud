@@ -9,9 +9,10 @@ plane that knows what's running where, a way to deploy containers to any
 machine in the fleet, and a dashboard to see it all. No Kubernetes cluster
 to babysit, no cloud bill.
 
-> **Status: Phase 0 — repo scaffolding.** No agent, no control plane, no
-> real UI yet. See [`ROADMAP.md`](ROADMAP.md) for what's being built and in
-> what order, and [`MVP.md`](MVP.md) for the first real milestone.
+> **Status: Phase 1 — single-node prototype.** `ambudctl` drives real
+> containerd directly (`run`/`ps`/`stop`) — no agent, no control plane,
+> no real UI yet. See [`ROADMAP.md`](ROADMAP.md) for what's being built
+> and in what order, and [`MVP.md`](MVP.md) for the first real milestone.
 
 ## Why does this exist?
 
@@ -104,17 +105,23 @@ Phase 5. See [`MVP.md`](MVP.md).
 
 ## Quick start
 
+`ambudctl` currently talks directly to a local containerd socket — no
+agent, no control plane yet (Phase 2 and Phase 3). It needs Linux; see
+[`DEVELOPMENT.md`](DEVELOPMENT.md) for a one-command Lima VM if you're
+on macOS/Windows.
+
 ```sh
 git clone https://github.com/vikas0686/ambud.git
 cd ambud
 make build
-./bin/ambudctl --version
+sudo ./bin/ambudctl run docker.io/library/nginx:alpine
+sudo ./bin/ambudctl ps
+sudo ./bin/ambudctl stop nginx
 ```
 
-That's the whole quick start for now — `ambudctl` has no real commands
-yet. This section grows into an actual "deploy your first container"
-walkthrough once Phase 1 lands. See [`DEVELOPMENT.md`](DEVELOPMENT.md)
-for full local environment setup.
+This section grows further once Phase 2/3 add the agent and control
+plane. See [`DEVELOPMENT.md`](DEVELOPMENT.md) for full local
+environment setup.
 
 ## Documentation
 

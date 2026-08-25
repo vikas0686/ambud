@@ -13,10 +13,11 @@ plane that knows what's running where, a way to deploy containers to any
 machine in the fleet, and a dashboard to see it all. No Kubernetes cluster
 to babysit, no cloud bill.
 
-> **Status: Phase 0 — repo scaffolding.** No agent, no control plane, no
-> real UI yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's being
-> built and in what order, and [`docs/MVP.md`](docs/MVP.md) for the first
-> real milestone.
+> **Status: Phase 1 — single-node prototype.** `ambudctl` drives real
+> containerd directly (`run`/`ps`/`stop`) — no agent, no control plane,
+> no real UI yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
+> being built and in what order, and [`docs/MVP.md`](docs/MVP.md) for
+> the first real milestone.
 
 ## Why does this exist?
 
@@ -93,8 +94,8 @@ version:
 
 | Phase | Milestone | Status |
 |---|---|---|
-| 0 | Repo, tooling, CI scaffolding | 🚧 in progress |
-| 1 | Single-node prototype (CLI drives containerd directly) | ⬜ not started |
+| 0 | Repo, tooling, CI scaffolding | ✅ done |
+| 1 | Single-node prototype (CLI drives containerd directly) | ✅ done |
 | 2 | Node agent (long-running service, local API) | ⬜ not started |
 | 3 | Control plane + PostgreSQL (still one node) | ⬜ not started |
 | 4 | Second machine joins the cluster | ⬜ not started |
@@ -110,18 +111,24 @@ and does not include.
 
 ## Quick start
 
+`ambudctl` currently talks directly to a local containerd socket — no
+agent, no control plane yet (Phase 2 and Phase 3). It needs Linux; see
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for a one-command Lima VM
+if you're on macOS/Windows.
+
 ```sh
 git clone https://github.com/vikas0686/ambud.git
 cd ambud
 make build
-./bin/ambudctl --version
+sudo ./bin/ambudctl run docker.io/library/nginx:alpine
+sudo ./bin/ambudctl ps
+sudo ./bin/ambudctl stop nginx
 ```
 
-That's the whole quick start for now — `ambudctl` doesn't have real
-commands yet (see the status line above). Once Phase 1 lands, this
-section grows into an actual "deploy your first container" walkthrough.
-For a full local dev environment (Postgres, containerd, the web
-dashboard), see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+This section grows further once Phase 2/3 add the agent and control
+plane — deploying to a *fleet*, not just the local machine. For a full
+local dev environment (Postgres, containerd, the web dashboard), see
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## Documentation
 
