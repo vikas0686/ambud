@@ -30,13 +30,33 @@ depends on which machine is your primary editor.
 
 1. Write and unit-test code locally on macOS with a normal Go install —
    this covers the majority of the codebase (see split above).
-2. For anything that needs real containerd (Phase 1 onward), use a
-   Linux VM. Options, roughly in order of convenience for macOS:
-   - **Lima** (`limactl start`) or **OrbStack** — lightweight Linux VMs
-     with good filesystem/network integration, minimal ceremony
-   - **Multipass** — Canonical's Ubuntu VM tool, also fine
-   - Any of these gets you a real `containerd`/`runc` environment in a
-     few minutes
+2. For anything that needs real containerd (Phase 1 onward), use the
+   checked-in Lima VM config, [`deploy/lima/ambud-dev.yaml`](../deploy/lima/ambud-dev.yaml):
+
+   ```sh
+   limactl start deploy/lima/ambud-dev.yaml   # first run: downloads a base
+                                                # image (~700MB) and provisions
+                                                # Go + gcc — several minutes
+   limactl shell ambud-dev
+   ```
+
+   This is the actual, tested setup Phase 1 was validated against — not
+   a generic "use a VM" pointer. It gives you **system-wide (rootful)
+   containerd**, matching how Ambud runs in production (Lima's own
+   default is rootless, which uses a different socket and doesn't
+   reflect the target deployment), a provisioned Go toolchain + `gcc`
+   (needed for `go test -race`), and the repo mounted read-write at the
+   *same absolute path* as on the host — so `cd` to your normal repo
+   path inside the VM and everything (`go build`, `go test`, `sudo
+   ./bin/ambudctl run ...` against the VM's containerd) just works.
+   `ambudctl` needs root to reach containerd's socket at this stage
+   (`/run/containerd/containerd.sock` is `root:root`) — run it with
+   `sudo` inside the VM, or revisit this once Phase 2's agent takes over
+   talking to containerd as a dedicated service user.
+
+   Other Linux-VM options (OrbStack, Multipass, plain UTM) work too if
+   you'd rather not use Lima — you'll just need to install containerd,
+   Go, and `gcc` yourself, and enable rootful (not rootless) containerd.
 3. **Best option once you're past Phase 1:** repurpose the old Windows
    PC as your actual Linux test node. Install a lightweight server Linux
    distro on it (Debian or Ubuntu Server — avoid anything exotic, this
@@ -70,7 +90,7 @@ optional at that point, it's the thing being tested.
 
 | Tool | Version | Used for |
 |---|---|---|
-| Go | 1.22+ | All backend code (needs `net/http` pattern routing from 1.22) |
+| Go | 1.26.3+ | All backend code — see `go.mod`'s `go` directive for the current floor (pulled up from 1.23 by containerd's own go.mod; check `go.mod` rather than this table if they've since diverged) |
 | Node.js | 20 LTS+ | Web UI |
 | npm or pnpm | current | Web UI package management (pick one, be consistent) |
 | PostgreSQL | 15+ | Control plane state store |
@@ -85,6 +105,25 @@ Go version policy: track the current Go release minus one (i.e., stay
 within the last two Go releases) rather than pinning indefinitely —
 update `go.mod`'s `go` directive deliberately when bumping, not
 accidentally via toolchain auto-update.
+
+## Running ambudctl today (Phase 1)
+
+As of Phase 1, `ambudctl` talks directly to a local containerd socket —
+there's no agent or control plane yet (those are Phase 2 and Phase 3;
+the sections below describe that *future* workflow). From inside the
+Lima VM (or any Linux box with containerd running):
+
+```sh
+cd /path/to/ambud   # same path as on the host, if using the Lima VM above
+go build -o bin/ambudctl ./cmd/ambudctl
+sudo ./bin/ambudctl run docker.io/library/nginx:alpine
+sudo ./bin/ambudctl ps
+sudo ./bin/ambudctl stop nginx
+```
+
+`sudo` is required because containerd's socket is `root:root` by
+default. `--socket` overrides the default socket path
+(`/run/containerd/containerd.sock`) if yours differs.
 
 ## Running Postgres locally
 

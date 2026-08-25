@@ -1,0 +1,62 @@
+# Lima VM for local Ambud development on macOS.
+#
+# Gives you a real Linux box with system-wide (rootful) containerd —
+# matching how Ambud actually runs in production via systemd — rather
+# than Lima's default rootless/user-scoped containerd, which uses a
+# different socket and doesn't reflect the target deployment. See
+# docs/DEVELOPMENT.md for the full macOS/Windows-dev vs. Linux-target
+# rationale.
+#
+# Usage:
+#   limactl start deploy/lima/ambud-dev.yaml
+#   limactl shell ambud-dev
+#   # inside the VM, the repo is mounted writable at the same path as on
+#   # the host, so `cd` there and run `go build`, `go test`, etc. directly
+#   # against the VM's containerd.
+
+base: template://default
+
+containerd:
+  system: true
+  user: false
+
+# Adjust this path if your checkout isn't at ~/Documents/personal/opensource/ambud.
+mounts:
+  - location: '~/Documents/personal/opensource/ambud'
+    writable: true
+
+# Lima's default template ships containerd but not a Go toolchain or a
+# C compiler (needed for `go test -race`) — install both so `limactl
+# start` alone is sufficient, with no manual follow-up steps.
+# Bump GO_VERSION here when go.mod's `go` directive moves to a newer
+# minor version; this script won't do it automatically.
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      GO_VERSION="1.26.7"
+      case "$(uname -m)" in
+        x86_64) GOARCH=amd64 ;;
+        aarch64) GOARCH=arm64 ;;
+        *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
+      esac
+
+      if ! /usr/local/go/bin/go version 2>/dev/null | grep -q "go${GO_VERSION} "; then
+        curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-${GOARCH}.tar.gz"
+        rm -rf /usr/local/go
+        tar -C /usr/local -xzf /tmp/go.tar.gz
+        rm -f /tmp/go.tar.gz
+      fi
+
+      if ! command -v gcc >/dev/null 2>&1; then
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq
+        apt-get install -y -qq gcc
+      fi
+
+      install -d -m 755 /etc/profile.d
+      cat > /etc/profile.d/ambud-go.sh <<'EOF'
+      export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+      EOF
