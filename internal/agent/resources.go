@@ -14,6 +14,7 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 
 	"github.com/vikas0686/ambud/internal/apitypes"
+	"github.com/vikas0686/ambud/internal/httputil"
 )
 
 // ResourceCollector periodically samples host CPU/RAM/disk usage in
@@ -104,5 +105,5 @@ func (c *ResourceCollector) Latest() apitypes.Resources {
 }
 
 func (h *handlers) getResources(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, h.collector.Latest())
+	httputil.WriteJSON(w, http.StatusOK, h.collector.Latest())
 }

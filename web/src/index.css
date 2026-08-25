@@ -1,9 +1,13 @@
 :root {
   color-scheme: light dark;
   --ambud-bg: #ffffff;
+  --ambud-surface: #f6f7f9;
+  --ambud-border: #e0e2e7;
   --ambud-fg: #1a1a1a;
   --ambud-muted: #6b6b6b;
   --ambud-accent: #3b6ef6;
+  --ambud-success: #1a7f37;
+  --ambud-error: #c62828;
 
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -12,8 +16,12 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --ambud-bg: #121212;
+    --ambud-surface: #1c1c1e;
+    --ambud-border: #2e2e30;
     --ambud-fg: #ededed;
     --ambud-muted: #9a9a9a;
+    --ambud-success: #4caf50;
+    --ambud-error: #ef5350;
   }
 }
 
@@ -28,27 +36,132 @@ body {
   color: var(--ambud-fg);
 }
 
-.placeholder {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 2rem;
-  gap: 0.5rem;
+.dashboard {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
 }
 
-.placeholder h1 {
-  margin: 0;
-  font-size: 2.5rem;
+.dashboard h1 {
+  margin: 0 0 2rem;
 }
 
-.placeholder p {
-  max-width: 32rem;
+.dashboard section {
+  margin-bottom: 2.5rem;
+}
+
+.dashboard h2 {
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ambud-muted);
+  margin-bottom: 0.75rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--ambud-surface);
+  border: 1px solid var(--ambud-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--ambud-border);
+  font-size: 0.9rem;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+th {
+  color: var(--ambud-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.empty {
   color: var(--ambud-muted);
 }
 
-.placeholder a {
-  color: var(--ambud-accent);
+.deploy-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 28rem;
+  background: var(--ambud-surface);
+  border: 1px solid var(--ambud-border);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.deploy-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--ambud-muted);
+}
+
+.deploy-form .hint {
+  font-weight: normal;
+  font-size: 0.75rem;
+}
+
+.deploy-form input {
+  font: inherit;
+  color: var(--ambud-fg);
+  background: var(--ambud-bg);
+  border: 1px solid var(--ambud-border);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+}
+
+.deploy-form button {
+  align-self: flex-start;
+  font: inherit;
+  color: white;
+  background: var(--ambud-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.deploy-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.success {
+  color: var(--ambud-success);
+}
+
+.error {
+  color: var(--ambud-error);
+}
+
+.state {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.state-running {
+  background: color-mix(in srgb, var(--ambud-success) 20%, transparent);
+  color: var(--ambud-success);
+}
+
+.state-stopped,
+.state-unknown,
+.state-pending {
+  background: color-mix(in srgb, var(--ambud-muted) 20%, transparent);
+  color: var(--ambud-muted);
 }

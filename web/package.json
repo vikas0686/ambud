@@ -8,12 +8,14 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run generate:api && vite",
+    "prebuild": "npm run generate:api",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate:api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.ts"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -24,6 +26,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "openapi-typescript": "7.13.0",
     "oxlint": "^1.79.0",
     "prettier": "3.9.6",
     "typescript": "~6.0.2",

@@ -13,10 +13,12 @@ plane that knows what's running where, a way to deploy containers to any
 machine in the fleet, and a dashboard to see it all. No Kubernetes cluster
 to babysit, no cloud bill.
 
-> **Status: Phase 2 — node agent.** `ambud-agent` is a long-running
-> daemon exposing a local HTTP API (container lifecycle + resource
-> facts); `ambudctl` is now a pure HTTP client of it — no control plane,
-> no real UI yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
+> **Status: Phase 3 — control plane.** `ambud-controlplane` (Postgres-backed)
+> tracks registered nodes and workloads; agents register, heartbeat, and
+> reconcile toward what it says should run. The web dashboard has its
+> first real screens — node list, deploy form, workload list — calling
+> the same API `ambudctl node`/`deploy`/`workloads` do. Still one node
+> at a time (Phase 4) and no user auth yet (Phase 9). See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
 > being built and in what order, and [`docs/MVP.md`](docs/MVP.md) for
 > the first real milestone.
 
@@ -98,7 +100,7 @@ version:
 | 0 | Repo, tooling, CI scaffolding | ✅ done |
 | 1 | Single-node prototype (CLI drives containerd directly) | ✅ done |
 | 2 | Node agent (long-running service, local API) | ✅ done |
-| 3 | Control plane + PostgreSQL (still one node) | ⬜ not started |
+| 3 | Control plane + PostgreSQL (still one node) | ✅ done |
 | 4 | Second machine joins the cluster | ⬜ not started |
 | 5 | Container scheduling across nodes — **MVP** | ⬜ not started |
 | 6 | Networking (port exposure, service discovery) | ⬜ not started |
@@ -112,28 +114,37 @@ and does not include.
 
 ## Quick start
 
-`ambud-agent` drives containerd; `ambudctl` talks to the agent over
-HTTP — no control plane yet (Phase 3), so this is still one machine at
-a time. Needs Linux; see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
-for a one-command Lima VM if you're on macOS/Windows.
+The control plane (Postgres-backed) and `ambudctl`'s cluster commands
+don't need containerd and run fine on macOS/Windows directly; the
+agent does need Linux — see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
+for a one-command Lima VM if that's not your host OS.
 
 ```sh
 git clone https://github.com/vikas0686/ambud.git
 cd ambud
 make build
 
-# terminal 1
-sudo ./bin/ambud-agent --listen 127.0.0.1:8080
+# Postgres, then the control plane
+docker compose -f deploy/compose/postgres.yaml up -d
+./bin/ambud-controlplane --db-dsn "postgres://ambud:devpassword@localhost:5432/ambud?sslmode=disable"
 
-# terminal 2
-./bin/ambudctl run docker.io/library/nginx:alpine
-./bin/ambudctl ps
-./bin/ambudctl stop nginx
+# generate a join token
+./bin/ambudctl node generate-join-token
+
+# on a Linux box (or the Lima VM): the agent
+sudo ./bin/ambud-agent --controlplane http://<host>:8081 --join-token <token> --node-name node-1
+
+# back wherever ambudctl runs
+./bin/ambudctl node list
+./bin/ambudctl deploy docker.io/library/nginx:alpine
+./bin/ambudctl workloads list
 ```
 
-This section grows further once Phase 3 adds the control plane —
-deploying to a *fleet*, not just one machine's agent. For a full local
-dev environment (Postgres, containerd, the web dashboard), see
+Still one node at a time (Phase 4 adds a second); no user auth yet
+(Phase 9) so keep this on a trusted network. `ambudctl run`/`ps`/`stop`
+(talking directly to one agent, no control plane) still work too — see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). For the full local dev
+environment including the web dashboard, see
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## Documentation

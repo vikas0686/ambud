@@ -1,0 +1,362 @@
+openapi: 3.1.0
+info:
+  title: Ambud Control Plane API
+  version: '0.3.0'
+  description: |
+    The ambud-controlplane REST API — node join-token issuance,
+    registration, and heartbeats, plus workload creation and listing.
+    See docs/ARCHITECTURE.md and docs/ROADMAP.md's Phase 3.
+
+    This is the source of truth for the wire contract: both the Go
+    server (internal/controlplane/api, internal/apitypes) and the web
+    dashboard's TypeScript types (generated via openapi-typescript, see
+    web/README.md) are meant to match this file. If they drift, this
+    file is what's wrong.
+
+    Not covered here: the ambud-agent API (internal/agent) — that's a
+    separate, node-local contract, not part of the cluster-management
+    surface a UI or ambudctl's node/deploy/workloads commands talk to.
+
+    No authentication yet (Phase 9) — every endpoint here is reachable
+    by anything that can reach the control plane on the network. Node
+    join tokens and credentials (see NodeCredential) are a *node*
+    identity mechanism, not a *user* one.
+servers:
+  - url: http://localhost:8081
+    description: Local development default (ambud-controlplane's --listen)
+
+paths:
+  /v1/join-tokens:
+    post:
+      operationId: createJoinToken
+      summary: Generate a one-time node join token
+      responses:
+        '201':
+          description: Token created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateJoinTokenResponse'
+
+  /v1/nodes/register:
+    post:
+      operationId: registerNode
+      summary: Register a new node using a join token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterNodeRequest'
+      responses:
+        '201':
+          description: Node registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterNodeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Join token not found or already used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Node name already taken, or join token already used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/nodes/{id}/heartbeat:
+    post:
+      operationId: heartbeat
+      summary: Report node state and receive desired workload state
+      description: |
+        Called by ambud-agent, not by ambudctl or the web UI — included
+        here because it's part of the same wire contract, not because
+        a human-facing client should call it directly.
+      security:
+        - nodeCredential: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+      responses:
+        '200':
+          description: Desired state for this node
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeartbeatResponse'
+        '401':
+          description: Missing or invalid credential
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Credential does not match the node ID in the path
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/nodes:
+    get:
+      operationId: listNodes
+      summary: List registered nodes
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListNodesResponse'
+
+  /v1/workloads:
+    post:
+      operationId: createWorkload
+      summary: Deploy a new workload
+      description: |
+        If node_id is omitted, the control plane assigns the only
+        registered node when there's exactly one, and returns 400
+        otherwise — there's no scheduler yet (Phase 5), so ambiguity is
+        rejected rather than guessed at.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkloadRequest'
+      responses:
+        '201':
+          description: Workload created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkloadStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Workload name already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      operationId: listWorkloads
+      summary: List workloads
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListWorkloadsResponse'
+
+components:
+  securitySchemes:
+    nodeCredential:
+      type: http
+      scheme: bearer
+      description: >-
+        A node's credential, issued at registration
+        (RegisterNodeResponse.credential). Distinct from user
+        authentication (not yet implemented — Phase 9).
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    Resources:
+      type: object
+      description: A snapshot of host CPU/RAM/disk usage.
+      properties:
+        cpu_cores:
+          type: integer
+        cpu_used_percent:
+          type: number
+        mem_total_bytes:
+          type: integer
+          format: int64
+        mem_used_bytes:
+          type: integer
+          format: int64
+        mem_used_percent:
+          type: number
+        disk_total_bytes:
+          type: integer
+          format: int64
+        disk_used_bytes:
+          type: integer
+          format: int64
+        disk_used_percent:
+          type: number
+
+    ContainerStatus:
+      type: object
+      properties:
+        name:
+          type: string
+        image:
+          type: string
+        state:
+          type: string
+          enum: [running, stopped, unknown]
+        pid:
+          type: integer
+
+    CreateJoinTokenResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: >-
+            Only ever returned here — the control plane stores just its
+            hash. Capture it immediately; it can't be retrieved again.
+
+    RegisterNodeRequest:
+      type: object
+      required: [join_token, name]
+      properties:
+        join_token:
+          type: string
+        name:
+          type: string
+
+    RegisterNodeResponse:
+      type: object
+      required: [node_id, credential]
+      properties:
+        node_id:
+          type: string
+          format: uuid
+        credential:
+          type: string
+          description: >-
+            Like the join token, only ever returned here. The agent
+            persists this locally (internal/agent's credential store)
+            and sends it as a bearer token on every heartbeat.
+
+    HeartbeatRequest:
+      type: object
+      properties:
+        resources:
+          $ref: '#/components/schemas/Resources'
+        containers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContainerStatus'
+
+    WorkloadSpec:
+      type: object
+      description: One entry in a HeartbeatResponse — a workload the node should be running.
+      properties:
+        name:
+          type: string
+        image:
+          type: string
+
+    HeartbeatResponse:
+      type: object
+      properties:
+        workloads:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadSpec'
+
+    NodeStatus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_heartbeat_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Absent/null if the node has never heartbeated.
+        resources:
+          $ref: '#/components/schemas/Resources'
+
+    ListNodesResponse:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeStatus'
+
+    CreateWorkloadRequest:
+      type: object
+      required: [name, image]
+      properties:
+        name:
+          type: string
+        image:
+          type: string
+        node_id:
+          type: string
+          format: uuid
+          description: Optional — see this endpoint's description.
+
+    WorkloadStatus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        image:
+          type: string
+        node_id:
+          type: string
+          format: uuid
+        node_name:
+          type: string
+        state:
+          type: string
+        pid:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    ListWorkloadsResponse:
+      type: object
+      properties:
+        workloads:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadStatus'

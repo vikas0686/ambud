@@ -1,0 +1,33 @@
+# Local Postgres for control-plane development and for
+# internal/controlplane/store's integration tests (which run against a
+# real database, not a fake — see that package's own test files).
+#
+# Usage:
+#   docker compose -f deploy/compose/postgres.yaml up -d
+#   docker compose -f deploy/compose/postgres.yaml down -v   # -v also drops the data volume
+#
+# Two databases are seeded: "ambud" for running ambud-controlplane
+# against locally, and "ambud_test" for the store package's tests
+# (which don't truncate between runs across packages — see
+# internal/agent/controlplane_test.go and internal/cpclient/client_test.go
+# — but do truncate within internal/controlplane/store's own tests).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ambud
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: ambud
+    ports:
+      - '${AMBUD_POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - ambud-postgres-data:/var/lib/postgresql/data
+      - ./init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ambud']
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  ambud-postgres-data:

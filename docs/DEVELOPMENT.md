@@ -106,14 +106,12 @@ within the last two Go releases) rather than pinning indefinitely —
 update `go.mod`'s `go` directive deliberately when bumping, not
 accidentally via toolchain auto-update.
 
-## Running ambudctl + ambud-agent today (Phase 2)
+## Running ambudctl directly against an agent (Phase 2 debug mode)
 
-As of Phase 2, `ambudctl` talks to `ambud-agent` over HTTP — it no
-longer touches containerd directly (that was Phase 1's scaffolding).
-There's still no control plane (Phase 3; the "Running the control
-plane" / "Running an agent" sections below describe that *future*
-workflow with join tokens, `--controlplane`, etc.). From inside the
-Lima VM (or any Linux box with containerd running):
+`ambudctl run`/`ps`/`stop` still talk straight to one `ambud-agent`,
+bypassing the control plane entirely — useful for low-level, single-
+machine debugging (see docs/ARCHITECTURE.md). From inside the Lima VM
+(or any Linux box with containerd running):
 
 ```sh
 cd /path/to/ambud   # same path as on the host, if using the Lima VM above
@@ -127,67 +125,76 @@ sudo ./bin/ambud-agent --listen 127.0.0.1:8080
 ./bin/ambudctl --agent http://127.0.0.1:8080 run docker.io/library/nginx:alpine
 ./bin/ambudctl --agent http://127.0.0.1:8080 ps
 ./bin/ambudctl --agent http://127.0.0.1:8080 stop nginx
-
-# resource facts (also used by the future scheduler — see docs/ROADMAP.md Phase 5)
-curl -s http://127.0.0.1:8080/v1/resources
 ```
 
 `--agent` defaults to `http://localhost:8080`, matching the agent's
-default `--listen`. `--socket` (containerd's socket path) moved from
-`ambudctl` to `ambud-agent`, since the agent is now the only thing that
-talks to containerd — `ambudctl`'s only network target is the agent.
-
-Image references must be fully qualified (`docker.io/library/nginx:alpine`,
-not `nginx:alpine`) — containerd's client, unlike the `docker` CLI,
-doesn't implicitly expand short Docker Hub names.
+default `--listen`. Image references must be fully qualified
+(`docker.io/library/nginx:alpine`, not `nginx:alpine`) — containerd's
+client, unlike the `docker` CLI, doesn't implicitly expand short Docker
+Hub names.
 
 ## Running Postgres locally
 
-Don't hand-install Postgres on your dev machine — run it in a container,
-even on the Linux node, for easy reset/teardown during development:
-
 ```bash
-docker run --name ambud-postgres \
-  -e POSTGRES_USER=ambud -e POSTGRES_PASSWORD=devpassword -e POSTGRES_DB=ambud \
-  -p 5432:5432 -d postgres:16
+docker compose -f deploy/compose/postgres.yaml up -d
 ```
 
-A `deploy/compose/postgres.yaml` (Phase 3) should codify this so it's
-not a memorized command. Migrations run against this instance via
-whichever tool was chosen in Phase 3 (`golang-migrate` or `goose`).
+This seeds two databases: `ambud` (for `ambud-controlplane` itself) and
+`ambud_test` (for `internal/controlplane/store`'s tests — see that
+package's own test files for why they run against real Postgres rather
+than a fake). If port 5432 is already taken on your machine, set
+`AMBUD_POSTGRES_PORT` before starting it, and update `--db-dsn`/
+`AMBUD_TEST_DATABASE_URL` below to match.
 
-## Running the control plane
+`ambud-controlplane` runs its own migrations automatically on startup
+(they're embedded in the binary — see `internal/controlplane/store`),
+so there's no separate migrate step.
 
-```bash
-# from repo root, once Phase 3 exists
-go run ./cmd/ambud-controlplane \
-  --db-dsn "postgres://ambud:devpassword@localhost:5432/ambud?sslmode=disable" \
-  --listen :8081
-```
+## Running the full stack (Phase 3): control plane + agent + ambudctl
 
-## Running an agent (once Phase 3 exists)
-
-This describes the *future* control-plane-connected agent workflow —
-for how to actually run `ambud-agent` today, see "Running ambudctl +
-ambud-agent today (Phase 2)" above; today's agent takes no
-`--controlplane` or `--join-token` flags. The agent needs a real Linux
-environment with containerd running (see above). From that environment:
+This is the real, tested cluster workflow. Postgres and the control
+plane can run on your host (they don't need containerd); the agent
+needs the Lima VM (or another Linux box with containerd).
 
 ```bash
-# one-time: generate a join token from the control plane
-ambudctl node generate-join-token --controlplane http://<control-plane-host>:8081
+# host: Postgres, then the control plane
+docker compose -f deploy/compose/postgres.yaml up -d
+go build -o bin/ambud-controlplane ./cmd/ambud-controlplane
+./bin/ambud-controlplane --listen :8081 \
+  --db-dsn "postgres://ambud:devpassword@localhost:5432/ambud?sslmode=disable"
 
-# start the agent with it
-go run ./cmd/ambud-agent \
-  --controlplane http://<control-plane-host>:8081 \
+# host: generate a join token
+./bin/ambudctl --controlplane http://localhost:8081 node generate-join-token
+# -> prints a token; copy it
+
+# inside the Lima VM: the agent, pointed at the control plane on the host
+# (Lima's VMs can reach the host at its LAN IP; "localhost" from inside
+# the VM means the VM itself, not your Mac)
+sudo ./bin/ambud-agent --listen 127.0.0.1:8080 \
+  --controlplane http://<host-ip>:8081 \
   --join-token <token-from-above> \
-  --listen :8080
+  --node-name dev-node-1
+
+# host: see the node, then deploy something to it
+./bin/ambudctl --controlplane http://localhost:8081 node list
+./bin/ambudctl --controlplane http://localhost:8081 deploy docker.io/library/nginx:alpine
+./bin/ambudctl --controlplane http://localhost:8081 workloads list
 ```
 
-For anything past a quick manual test, install the systemd unit from
-`deploy/systemd/ambud-agent.service` (added in Phase 2) instead of
-running via `go run` — this also validates the actual production startup
-path (restart-on-failure, logging to journald) rather than only the dev
+The deploy doesn't start the container immediately — the assigned
+node's agent picks it up on its next heartbeat (`--heartbeat-interval`,
+default 5s). Re-run `workloads list` a few seconds later to see it
+`running`.
+
+The agent persists its control-plane credential to
+`--credentials-path` (default `/var/lib/ambud/agent/credentials.json`)
+after its first successful registration — delete that file to force
+re-registration (you'll need a fresh join token; each one is single-use).
+
+For anything past a quick manual test, install the systemd units from
+`deploy/systemd/` instead of running via `go build && ./bin/...` by
+hand — this also validates the actual production startup path
+(restart-on-failure, logging to journald) rather than only the dev
 shortcut.
 
 ## Running tests
@@ -198,14 +205,29 @@ make test-race      # go test -race ./... — see GO_LEARNING_PATH.md #7
 make lint           # golangci-lint run
 ```
 
-Unit tests must not require a live Postgres or containerd — that's the
-point of the interface-driven design in
+Most tests don't need a live Postgres or containerd — that's the point
+of the interface-driven design in
 [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md) and
-[`GO_LEARNING_PATH.md`](GO_LEARNING_PATH.md) #9. Anything that
-genuinely needs a live dependency belongs in a separate, explicitly-
-named integration test target (e.g., `make test-integration`, added
-once Phase 3's store layer exists), which CI can choose to run
-differently (or not at all on every push) from the fast unit suite.
+[`GO_LEARNING_PATH.md`](GO_LEARNING_PATH.md) #9. `internal/controlplane/store`
+is the one deliberate exception: it tests against a real Postgres, not
+a fake, because the whole point of that package is the SQL and the
+constraints it depends on (unique names, foreign keys) — a fake
+couldn't validate those honestly. `internal/agent` and `internal/cpclient`
+add a further layer on top, driving their real HTTP clients against the
+real control-plane API server backed by that same real Postgres.
+
+These tests don't need a separate `make test-integration` target or
+build tag — they run as part of the normal `go test ./...` / `make
+test`, but `t.Skip` themselves (not fail) if no Postgres is reachable
+at `AMBUD_TEST_DATABASE_URL` (default `postgres://ambud:devpassword@localhost:15432/ambud_test?sslmode=disable`).
+Start one with `docker compose -f deploy/compose/postgres.yaml up -d`
+(the compose file's default port is 5432 — either set
+`AMBUD_POSTGRES_PORT=15432` when starting it, or point
+`AMBUD_TEST_DATABASE_URL` at whatever port you used) or the throwaway
+`docker run` a store/agent/cpclient test failure message will show you.
+CI provides Postgres via a service container in `.github/workflows/ci.yml`
+so these run on every push regardless of what a contributor has set up
+locally.
 
 ## Local multi-node development
 

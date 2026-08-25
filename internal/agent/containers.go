@@ -8,17 +8,18 @@ import (
 	"net/http"
 
 	"github.com/vikas0686/ambud/internal/apitypes"
+	"github.com/vikas0686/ambud/internal/httputil"
 	"github.com/vikas0686/ambud/internal/runtime"
 )
 
 func (h *handlers) createContainer(w http.ResponseWriter, r *http.Request) {
 	var req apitypes.CreateContainerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		httputil.WriteError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 	if req.Name == "" || req.Image == "" {
-		writeError(w, http.StatusBadRequest, "name and image are required")
+		httputil.WriteError(w, http.StatusBadRequest, "name and image are required")
 		return
 	}
 
@@ -27,7 +28,7 @@ func (h *handlers) createContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, apitypes.ContainerStatus{
+	httputil.WriteJSON(w, http.StatusCreated, apitypes.ContainerStatus{
 		Name:  req.Name,
 		Image: req.Image,
 		State: string(runtime.StateRunning),
@@ -37,10 +38,10 @@ func (h *handlers) createContainer(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) listContainers(w http.ResponseWriter, r *http.Request) {
 	statuses, err := h.rt.List(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		httputil.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, apitypes.ListContainersResponse{Containers: toAPIStatuses(statuses)})
+	httputil.WriteJSON(w, http.StatusOK, apitypes.ListContainersResponse{Containers: toAPIStatuses(statuses)})
 }
 
 func (h *handlers) getContainer(w http.ResponseWriter, r *http.Request) {
@@ -48,14 +49,14 @@ func (h *handlers) getContainer(w http.ResponseWriter, r *http.Request) {
 
 	st, found, err := findContainer(r, h.rt, name)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		httputil.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if !found {
-		writeError(w, http.StatusNotFound, "container not found: "+name)
+		httputil.WriteError(w, http.StatusNotFound, "container not found: "+name)
 		return
 	}
-	writeJSON(w, http.StatusOK, toAPIStatus(st))
+	httputil.WriteJSON(w, http.StatusOK, toAPIStatus(st))
 }
 
 func (h *handlers) stopContainer(w http.ResponseWriter, r *http.Request) {
@@ -78,11 +79,11 @@ func (h *handlers) restartContainer(w http.ResponseWriter, r *http.Request) {
 
 	st, found, err := findContainer(r, h.rt, name)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		httputil.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if !found {
-		writeError(w, http.StatusNotFound, "container not found: "+name)
+		httputil.WriteError(w, http.StatusNotFound, "container not found: "+name)
 		return
 	}
 
@@ -95,7 +96,7 @@ func (h *handlers) restartContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, apitypes.ContainerStatus{
+	httputil.WriteJSON(w, http.StatusOK, apitypes.ContainerStatus{
 		Name:  name,
 		Image: st.Image,
 		State: string(runtime.StateRunning),
@@ -105,11 +106,11 @@ func (h *handlers) restartContainer(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) pullImage(w http.ResponseWriter, r *http.Request) {
 	var req apitypes.PullImageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		httputil.WriteError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 	if req.Image == "" {
-		writeError(w, http.StatusBadRequest, "image is required")
+		httputil.WriteError(w, http.StatusBadRequest, "image is required")
 		return
 	}
 
@@ -138,11 +139,11 @@ func findContainer(r *http.Request, rt runtime.Runtime, name string) (runtime.Co
 func writeRuntimeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, runtime.ErrAlreadyExists):
-		writeError(w, http.StatusConflict, err.Error())
+		httputil.WriteError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, runtime.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
+		httputil.WriteError(w, http.StatusNotFound, err.Error())
 	default:
-		writeError(w, http.StatusInternalServerError, err.Error())
+		httputil.WriteError(w, http.StatusInternalServerError, err.Error())
 	}
 }
 

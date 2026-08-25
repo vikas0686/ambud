@@ -16,11 +16,12 @@ import (
 func TestRun_ReturnsOnContextCancellation(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	fake := runtime.NewFake()
+	cfg := config{listenAddr: "127.0.0.1:0", resourceInterval: time.Hour, diskPath: "/"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- run(ctx, fake, "127.0.0.1:0", time.Hour, "/", logger)
+		done <- run(ctx, fake, cfg, logger)
 	}()
 
 	// No need to wait for the server to actually start listening first:
@@ -51,9 +52,11 @@ func TestRun_ReturnsErrorWhenAddressUnavailable(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = l.Close() })
 
+	cfg := config{listenAddr: l.Addr().String(), resourceInterval: time.Hour, diskPath: "/"}
+
 	done := make(chan error, 1)
 	go func() {
-		done <- run(context.Background(), fake, l.Addr().String(), time.Hour, "/", logger)
+		done <- run(context.Background(), fake, cfg, logger)
 	}()
 
 	select {

@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Generated from ../api/openapi.yaml (npm run generate:api) — regenerated
+# automatically before dev/build so it can't silently drift from the
+# source of truth. Not committed for the same reason.
+src/api/schema.ts
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

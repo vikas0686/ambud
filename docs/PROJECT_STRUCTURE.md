@@ -23,8 +23,15 @@ ambud/
 │   │   ├── store/               # Postgres access layer
 │   │   └── store/migrations/   # SQL migration files
 │   ├── runtime/                # containerd wrapper (used by internal/agent)
-│   ├── apiclient/              # shared HTTP client used by ambudctl and
-│   │                          #   (later) any other Go client of the API
+│   ├── apiclient/              # HTTP client for one ambud-agent's API
+│   │                          #   (used by ambudctl's run/ps/stop)
+│   ├── cpclient/                # HTTP client for the control plane's
+│   │                          #   cluster API (ambudctl's node/deploy/
+│   │                          #   workloads; the web dashboard will use
+│   │                          #   the same endpoints, just from TS)
+│   ├── httputil/                # tiny helpers shared by internal/agent
+│   │                          #   and internal/controlplane/api (JSON
+│   │                          #   response writing, request logging)
 │   └── apitypes/               # request/response structs shared by
 │                              #   control plane, agent, and ambudctl
 ├── api/
@@ -71,18 +78,28 @@ client, scheduler) and handing off to `internal/` packages that contain
 all the actual logic and are unit-testable without a `main()` in the
 loop.
 
-### `internal/apitypes` and `internal/apiclient` as their own packages
+### `internal/apitypes`, `internal/apiclient`, and `internal/cpclient` as their own packages
 
-The request/response structs that flow over the control-plane REST API
-are used by three consumers: the control plane (to encode responses),
-the agent (to decode heartbeat responses / encode reports), and
-`ambudctl` (to encode requests / decode responses). Putting them in
-their own package avoids a situation where `internal/agent` has to
-import `internal/controlplane/api` just to get a struct definition,
-which would wrongly couple the agent to control-plane internals.
-`apiclient` similarly exists so `ambudctl`'s `cmd/` package doesn't
-reimplement HTTP plumbing, and so a future second Go-based client
-(imagine a Terraform provider) has something to import.
+The request/response structs that flow over both HTTP APIs (agent and
+control plane) are used by multiple consumers: each server (to encode
+responses), the agent (to decode heartbeat responses / encode reports),
+and `ambudctl` (to encode requests / decode responses). Putting them in
+one shared `apitypes` package avoids a situation where, say,
+`internal/agent` has to import `internal/controlplane/api` just to get
+a struct definition, which would wrongly couple the agent to
+control-plane internals.
+
+`apiclient` and `cpclient` are two separate client packages, not one —
+deliberately. They talk to two different servers with no overlapping
+endpoints (one agent's local API vs. the control plane's cluster API),
+used by different `ambudctl` commands (`run`/`ps`/`stop` vs.
+`node`/`deploy`/`workloads`) for different purposes (agent's is also
+what makes `apiclient.Client` swap in for Phase 1's direct-containerd
+`internal/runtime.Runtime` — see `ARCHITECTURE.md` — which `cpclient`
+has no equivalent need for). Splitting them keeps each client's surface
+matched to exactly one contract instead of one package awkwardly
+serving two; a future Go SDK (e.g. for a Terraform provider) would
+likely want both, imported separately.
 
 ### `api/openapi.yaml` as the source of truth for the contract
 
@@ -169,10 +186,17 @@ juggling. This is the more boring choice, deliberately.
   that logic belongs in `internal/`, where it can be unit tested without
   invoking the binary.
 - Don't let `internal/agent` or `internal/controlplane/*` import each
-  other directly — they should only share `internal/apitypes`. If the
-  agent ever needs something from control-plane code, that's a sign the
-  shared concept belongs in `apitypes` (or a new shared package), not
-  that the boundary should be crossed.
+  other directly in production code — they should only share
+  `internal/apitypes`. If the agent ever needs something from
+  control-plane code, that's a sign the shared concept belongs in
+  `apitypes` (or a new shared package), not that the boundary should be
+  crossed. Test files are a deliberate exception, not a loophole:
+  `internal/agent/controlplane_test.go` and `internal/cpclient/client_test.go`
+  both import `internal/controlplane/api` and `.../store` to drive the
+  *real* control-plane server (backed by real Postgres) in integration
+  tests — proving the actual wire contract, not a mocked one. That's
+  test-time-only coupling to verify the boundary, not production code
+  depending across it.
 - Don't scatter SQL queries as inline strings deep inside handler code —
   keep them in `internal/controlplane/store`, with `api` calling typed
   methods (`store.GetNode(ctx, id)`), so the SQL surface is auditable in

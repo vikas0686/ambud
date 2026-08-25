@@ -1,0 +1,34 @@
+[Unit]
+Description=Ambud control plane
+Documentation=https://github.com/vikas0686/ambud/blob/main/docs/ARCHITECTURE.md
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+# ambud-controlplane isn't packaged yet (see docs/ROADMAP.md Phase 0's
+# "Do NOT build yet" list) — this assumes a binary built with `make
+# build` and copied to /usr/local/bin manually. Revisit this path once
+# Phase 10 adds real packaging.
+#
+# --db-dsn here assumes Postgres running on the same host; point it at
+# a real database and don't commit real credentials into this file —
+# use an EnvironmentFile (see systemd.exec(5)) for anything beyond
+# local development.
+ExecStart=/usr/local/bin/ambud-controlplane --listen 0.0.0.0:8081 \
+  --db-dsn postgres://ambud:devpassword@localhost:5432/ambud?sslmode=disable
+Restart=on-failure
+RestartSec=2s
+
+# Unlike the agent, the control plane never touches containerd's
+# socket, so it doesn't need root — create this user first
+# (e.g. `useradd --system --no-create-home ambud`); real user/secret
+# provisioning is Phase 10 packaging work, not covered here.
+User=ambud
+Group=ambud
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
