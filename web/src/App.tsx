@@ -1,4 +1,5 @@
 import { NodeList } from './components/NodeList'
+import { RegisterNodeForm } from './components/RegisterNodeForm'
 import { DeployForm } from './components/DeployForm'
 import { WorkloadList } from './components/WorkloadList'
 
@@ -10,6 +11,11 @@ function App() {
       <section>
         <h2>Nodes</h2>
         <NodeList />
+      </section>
+
+      <section>
+        <h2>Add a node</h2>
+        <RegisterNodeForm />
       </section>
 
       <section>

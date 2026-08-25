@@ -178,6 +178,43 @@ func TestReconciler_StartsDesiredWorkloadNotYetRunning(t *testing.T) {
 	}
 }
 
+func TestReconciler_RestartsCrashedWorkload(t *testing.T) {
+	credPath := filepath.Join(t.TempDir(), "credentials.json")
+	cp := newFakeControlPlane()
+	cp.heartbeatResp = apitypes.HeartbeatResponse{
+		Workloads: []apitypes.WorkloadSpec{{Name: "web", Image: "nginx:alpine"}},
+	}
+	rt := runtime.NewFake()
+	if err := rt.Run(context.Background(), "web", "nginx:alpine"); err != nil {
+		t.Fatalf("seed rt.Run() error = %v", err)
+	}
+	// Simulate the container's process dying on its own — the record
+	// stays around as Stopped, distinct from having been Stop()'d (which
+	// would remove it). Before the fix, reconcile only checked "does a
+	// record exist by this name," so a crashed-but-present container
+	// was wrongly treated as already satisfied and never restarted.
+	rt.SimulateCrash("web")
+
+	collector := NewResourceCollector(time.Hour, "/")
+	r := NewReconciler(cp, rt, collector, credPath, "join-tok", "my-node", time.Hour, testLogger())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx) }()
+
+	cp.waitForHeartbeat(t)
+	cancel()
+	<-done
+
+	statuses, err := rt.List(context.Background())
+	if err != nil {
+		t.Fatalf("rt.List() error = %v", err)
+	}
+	if len(statuses) != 1 || statuses[0].Name != "web" || statuses[0].State != runtime.StateRunning {
+		t.Errorf("rt.List() = %+v, want web running again after reconcile", statuses)
+	}
+}
+
 func TestReconciler_DoesNotRestartAlreadyRunningWorkload(t *testing.T) {
 	credPath := filepath.Join(t.TempDir(), "credentials.json")
 	cp := newFakeControlPlane()

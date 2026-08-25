@@ -117,19 +117,40 @@ func (r *Reconciler) heartbeatOnce(ctx context.Context, nodeID, credential strin
 }
 
 // reconcile starts any desired workload that isn't currently running
-// locally. It does not stop or remove containers outside desired —
-// Phase 3 has no workload-deletion API yet, so nothing should ever be
-// "extra" in normal operation; see docs/ROADMAP.md's Phase 3.
+// locally — including one that crashed: containerd keeps a container's
+// record around (state Stopped or Unknown) after its process exits
+// until something deletes it, so "present in current" is not the same
+// as "running," and checking presence alone would silently leave a
+// crashed workload dead until something else touched it. It does not
+// stop or remove containers outside desired — Phase 3 has no
+// workload-deletion API yet, so nothing should ever be "extra" in
+// normal operation; see docs/ROADMAP.md's Phase 3.
 func (r *Reconciler) reconcile(ctx context.Context, current []runtime.ContainerStatus, desired []apitypes.WorkloadSpec) {
-	running := make(map[string]bool, len(current))
+	byName := make(map[string]runtime.ContainerStatus, len(current))
 	for _, c := range current {
-		running[c.Name] = true
+		byName[c.Name] = c
 	}
 
 	for _, wl := range desired {
-		if running[wl.Name] {
+		existing, exists := byName[wl.Name]
+		if exists && existing.State == runtime.StateRunning {
 			continue
 		}
+
+		if exists {
+			// A stopped/crashed container's record still occupies the
+			// name (and its snapshot) in containerd — Run would fail
+			// with ErrAlreadyExists without clearing it first. Stop is
+			// safe to call on an already-non-running container; it
+			// just removes the stale record. See internal/runtime's
+			// Containerd.Stop and its stopTask helper.
+			r.logger.Info("reconcile: clearing stale container before restart", "name", wl.Name, "state", existing.State)
+			if err := r.rt.Stop(ctx, wl.Name); err != nil && !errors.Is(err, runtime.ErrNotFound) {
+				r.logger.Error("reconcile: clear stale container failed", "name", wl.Name, "error", err)
+				continue
+			}
+		}
+
 		r.logger.Info("reconcile: starting desired workload", "name", wl.Name, "image", wl.Image)
 		if err := r.rt.Run(ctx, wl.Name, wl.Image); err != nil {
 			r.logger.Error("reconcile: start workload failed", "name", wl.Name, "error", err)

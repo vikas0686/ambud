@@ -77,8 +77,9 @@ func (f *Fake) Stop(_ context.Context, name string) error {
 	// Matches Containerd.Stop: the container is fully removed, not just
 	// marked stopped — see the Runtime.Stop doc comment ("... and
 	// removes it"). A container reappearing as StateStopped in List()
-	// only happens if its task exited on its own (e.g. crashed) without
-	// Stop ever being called; Fake doesn't currently model that case.
+	// is what a crash looks like instead (task exits on its own,
+	// nobody called Stop) — see SimulateCrash for modeling that in
+	// tests.
 	delete(f.containers, name)
 	return nil
 }
@@ -98,4 +99,24 @@ func (f *Fake) List(_ context.Context) ([]ContainerStatus, error) {
 // Close implements Runtime. It's a no-op: Fake holds no real resources.
 func (f *Fake) Close() error {
 	return nil
+}
+
+// SimulateCrash flips an existing container's state to Stopped without
+// removing it — modeling a container whose process exited on its own
+// (containerd keeps the record around until something calls Stop/Delete
+// on it), as distinct from Stop, which removes it entirely. It's a
+// no-op if name doesn't exist. Test-only: nothing in production code
+// calls this — a real crash is something containerd reports, not
+// something Ambud causes.
+func (f *Fake) SimulateCrash(name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	c, exists := f.containers[name]
+	if !exists {
+		return
+	}
+	c.State = StateStopped
+	c.PID = 0
+	f.containers[name] = c
 }

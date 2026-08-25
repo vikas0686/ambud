@@ -139,6 +139,17 @@ th {
   cursor: not-allowed;
 }
 
+.join-command {
+  background: var(--ambud-bg);
+  border: 1px solid var(--ambud-border);
+  border-radius: 4px;
+  padding: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+
 .success {
   color: var(--ambud-success);
 }

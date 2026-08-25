@@ -9,11 +9,14 @@ import type { components } from './schema'
 export type NodeStatus = components['schemas']['NodeStatus']
 export type WorkloadStatus = components['schemas']['WorkloadStatus']
 export type CreateWorkloadRequest = components['schemas']['CreateWorkloadRequest']
+export type CreateJoinTokenResponse = components['schemas']['CreateJoinTokenResponse']
 export type ErrorResponse = components['schemas']['ErrorResponse']
 
 // Same default as ambud-controlplane's --listen; override via
-// VITE_CONTROLPLANE_URL for a dev server pointed elsewhere.
-const BASE_URL = import.meta.env.VITE_CONTROLPLANE_URL ?? 'http://localhost:8081'
+// VITE_CONTROLPLANE_URL for a dev server pointed elsewhere. Exported so
+// components can show it in copy-pasteable instructions (see
+// RegisterNodeForm) without duplicating the same default.
+export const BASE_URL = import.meta.env.VITE_CONTROLPLANE_URL ?? 'http://localhost:8081'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -39,4 +42,8 @@ export function listWorkloads(): Promise<{ workloads: WorkloadStatus[] }> {
 
 export function createWorkload(req: CreateWorkloadRequest): Promise<WorkloadStatus> {
   return request('/v1/workloads', { method: 'POST', body: JSON.stringify(req) })
+}
+
+export function createJoinToken(): Promise<CreateJoinTokenResponse> {
+  return request('/v1/join-tokens', { method: 'POST' })
 }
