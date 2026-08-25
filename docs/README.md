@@ -9,12 +9,14 @@ plane that knows what's running where, a way to deploy containers to any
 machine in the fleet, and a dashboard to see it all. No Kubernetes cluster
 to babysit, no cloud bill.
 
-> **Status: Phase 3 — control plane.** `ambud-controlplane` (Postgres-backed)
-> tracks registered nodes and workloads; agents register, heartbeat, and
-> reconcile toward what it says should run. The web dashboard has its
-> first real screens — node list, deploy form, workload list — calling
-> the same API `ambudctl node`/`deploy`/`workloads` do. Still one node
-> at a time (Phase 4) and no user auth yet (Phase 9). See [`ROADMAP.md`](ROADMAP.md) for what's being built
+> **Status: Phase 4 — multi-node cluster.** Real second machine, joined
+> and validated: `ambudctl node list` and the web dashboard show
+> online/offline status (computed from a configurable heartbeat
+> timeout), a dead node's containers keep running (agent failure ≠
+> workload failure), and a restarted agent rejoins on its saved
+> credential instead of re-registering. No scheduler yet (Phase 5, so
+> deploys still target a node explicitly) and no user auth yet (Phase 9).
+> See [`ROADMAP.md`](ROADMAP.md) for what's being built
 > and in what order, and [`MVP.md`](MVP.md) for the first real milestone.
 
 ## Why does this exist?

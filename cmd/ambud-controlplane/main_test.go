@@ -49,7 +49,7 @@ func TestRun_ReturnsOnContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- run(ctx, fakeStore{}, "127.0.0.1:0", logger)
+		done <- run(ctx, fakeStore{}, "127.0.0.1:0", time.Second, logger)
 	}()
 
 	cancel()
@@ -76,7 +76,7 @@ func TestRun_ReturnsErrorWhenAddressUnavailable(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- run(context.Background(), fakeStore{}, l.Addr().String(), logger)
+		done <- run(context.Background(), fakeStore{}, l.Addr().String(), time.Second, logger)
 	}()
 
 	select {

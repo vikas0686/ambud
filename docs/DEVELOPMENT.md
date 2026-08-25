@@ -231,26 +231,46 @@ locally.
 
 ## Local multi-node development
 
-Once you're past Phase 4, local multi-node testing has two reasonable
-setups:
+**The tested setup: two separate Lima VMs, control plane on the host.**
+`deploy/lima/ambud-dev.yaml` can be started under different instance
+names to get two independent Linux boxes — separate kernels, separate
+containerd, separate network namespaces — not just two processes on one
+machine:
 
-1. **Two Linux VMs on one machine** (fine through Phase 5–6 for basic
-   functional testing) — e.g., two Lima/Multipass instances, both
-   pointed at a control plane running on your host or in a third VM.
-   Cheap to spin up and tear down, good for fast iteration.
-2. **Real separate physical machines** (needed eventually, and
-   recommended from Phase 4 onward at least once per phase) — this is
-   the only way to catch real-network issues (actual latency, real NAT/
-   firewall behavior, genuine hardware resource limits) that two VMs
-   sharing one host's kernel and network stack will never surface. Your
-   repurposed old Windows-PC-turned-Linux-box is the natural node #2
-   here, with your primary dev machine (or a third box) running the
-   control plane.
+```sh
+limactl start --name=ambud-dev deploy/lima/ambud-dev.yaml    # node 1
+limactl start --name=ambud-dev-2 deploy/lima/ambud-dev.yaml  # node 2
+```
 
-Use VMs for day-to-day iteration, and validate against real separate
-hardware before considering a phase actually "done" — the roadmap's
-Definition of Done for Phase 4 explicitly calls for two real physical
-machines for this reason.
+Each Lima VM gets its own isolated NAT network — the two VMs cannot
+reach each other directly, and (surprisingly, until you check) may even
+get the *same* private IP, since each is a separate /24. What every Lima
+VM *can* reach is the host, via the special hostname `host.lima.internal`
+(confirm with `limactl shell ambud-dev -- cat /etc/hosts`). Since
+`ambud-controlplane` doesn't need containerd, the natural topology is:
+Postgres + the control plane run on the host (`--listen 0.0.0.0:8081`
+so the VMs can actually reach it, not `127.0.0.1`), and each VM runs
+only `ambud-agent --controlplane http://host.lima.internal:8081 ...`.
+`ambudctl` also runs on the host, talking to `127.0.0.1:8081`.
+
+This is genuinely two independent machines for everything that matters
+(agent code, containerd, the network hop to the control plane over real
+HTTP) — not a simulation. It's just not two different pieces of
+physical hardware. If you want that extra layer of confidence — real
+latency, a real router, a genuinely separate kernel's resource limits —
+your repurposed old PC (or any spare machine) as node 2, reachable over
+your actual LAN, is the natural next step; nothing about the setup above
+changes except which hostname/IP `--controlplane` and `host.lima.internal`
+resolve to.
+
+One gotcha worth knowing in advance: if you reset the control plane's
+database (e.g. `DROP DATABASE ambud`) while an agent still has a saved
+credential file (`--credentials-path`, default
+`/var/lib/ambud/agent/credentials.json`) from before the reset, it will
+try to heartbeat with a credential the fresh database has never heard
+of and fail with "invalid credential" in a loop. Delete that file
+before restarting the agent in that situation — it'll register fresh
+with a new join token instead of assuming it's already known.
 
 ## Web UI development
 

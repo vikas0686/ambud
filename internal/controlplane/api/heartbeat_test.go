@@ -60,8 +60,8 @@ func TestHeartbeat_UpdatesResourcesAndReturnsDesiredState(t *testing.T) {
 	srv.ServeHTTP(listRec, listReq)
 	var nodes apitypes.ListNodesResponse
 	_ = json.Unmarshal(listRec.Body.Bytes(), &nodes)
-	if len(nodes.Nodes) != 1 || nodes.Nodes[0].Resources.CPUCores != 4 {
-		t.Errorf("ListNodes = %+v, want CPUCores=4 after heartbeat", nodes.Nodes)
+	if len(nodes.Nodes) != 1 || nodes.Nodes[0].Resources.CPUCores != 4 || nodes.Nodes[0].Status != apitypes.NodeOnline {
+		t.Errorf("ListNodes = %+v, want CPUCores=4 and status=online after a fresh heartbeat", nodes.Nodes)
 	}
 }
 

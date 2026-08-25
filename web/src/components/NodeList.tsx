@@ -23,6 +23,7 @@ export function NodeList() {
       <thead>
         <tr>
           <th>Name</th>
+          <th>Status</th>
           <th>Last heartbeat</th>
           <th>CPU</th>
           <th>Memory</th>
@@ -32,6 +33,9 @@ export function NodeList() {
         {nodes.map((n) => (
           <tr key={n.id}>
             <td>{n.name}</td>
+            <td>
+              <span className={`state state-${n.status}`}>{n.status}</span>
+            </td>
             <td>{formatHeartbeat(n.last_heartbeat_at)}</td>
             <td>
               {n.resources?.cpu_cores ?? 0} cores, {(n.resources?.cpu_used_percent ?? 0).toFixed(1)}

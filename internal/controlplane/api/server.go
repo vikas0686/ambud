@@ -5,13 +5,21 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/vikas0686/ambud/internal/httputil"
 )
 
-// NewServer builds the control plane's HTTP handler.
-func NewServer(st Store, logger *slog.Logger) http.Handler {
-	h := &handlers{store: st}
+// DefaultHeartbeatTimeout is how long a node can go without
+// heartbeating before GET /v1/nodes reports it offline — three missed
+// heartbeats at ambud-agent's own default --heartbeat-interval (5s).
+const DefaultHeartbeatTimeout = 15 * time.Second
+
+// NewServer builds the control plane's HTTP handler. heartbeatTimeout
+// controls online/offline classification in NodeStatus.Status — see
+// docs/ROADMAP.md's Phase 4.
+func NewServer(st Store, heartbeatTimeout time.Duration, logger *slog.Logger) http.Handler {
+	h := &handlers{store: st, heartbeatTimeout: heartbeatTimeout}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/join-tokens", h.createJoinToken)
@@ -29,5 +37,6 @@ func NewServer(st Store, logger *slog.Logger) http.Handler {
 }
 
 type handlers struct {
-	store Store
+	store            Store
+	heartbeatTimeout time.Duration
 }

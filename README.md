@@ -13,12 +13,14 @@ plane that knows what's running where, a way to deploy containers to any
 machine in the fleet, and a dashboard to see it all. No Kubernetes cluster
 to babysit, no cloud bill.
 
-> **Status: Phase 3 — control plane.** `ambud-controlplane` (Postgres-backed)
-> tracks registered nodes and workloads; agents register, heartbeat, and
-> reconcile toward what it says should run. The web dashboard has its
-> first real screens — node list, deploy form, workload list — calling
-> the same API `ambudctl node`/`deploy`/`workloads` do. Still one node
-> at a time (Phase 4) and no user auth yet (Phase 9). See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
+> **Status: Phase 4 — multi-node cluster.** Real second machine, joined
+> and validated: `ambudctl node list` and the web dashboard show
+> online/offline status (computed from a configurable heartbeat
+> timeout), a dead node's containers keep running (agent failure ≠
+> workload failure), and a restarted agent rejoins on its saved
+> credential instead of re-registering. No scheduler yet (Phase 5, so
+> deploys still target a node explicitly) and no user auth yet (Phase 9).
+> See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
 > being built and in what order, and [`docs/MVP.md`](docs/MVP.md) for
 > the first real milestone.
 
@@ -101,7 +103,7 @@ version:
 | 1 | Single-node prototype (CLI drives containerd directly) | ✅ done |
 | 2 | Node agent (long-running service, local API) | ✅ done |
 | 3 | Control plane + PostgreSQL (still one node) | ✅ done |
-| 4 | Second machine joins the cluster | ⬜ not started |
+| 4 | Second machine joins the cluster | ✅ done |
 | 5 | Container scheduling across nodes — **MVP** | ⬜ not started |
 | 6 | Networking (port exposure, service discovery) | ⬜ not started |
 | 7 | Storage (local persistent volumes) | ⬜ not started |

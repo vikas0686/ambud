@@ -17,7 +17,7 @@ import (
 func testServer(t *testing.T, st Store) http.Handler {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	return NewServer(st, logger)
+	return NewServer(st, DefaultHeartbeatTimeout, logger)
 }
 
 func createJoinToken(t *testing.T, srv http.Handler) string {
@@ -130,5 +130,8 @@ func TestListNodes(t *testing.T) {
 	}
 	if len(resp.Nodes) != 1 || resp.Nodes[0].Name != "node-1" {
 		t.Errorf("Nodes = %+v, want one node named node-1", resp.Nodes)
+	}
+	if resp.Nodes[0].Status != apitypes.NodeOffline {
+		t.Errorf("Nodes[0].Status = %q, want %q for a node that has never heartbeated", resp.Nodes[0].Status, apitypes.NodeOffline)
 	}
 }

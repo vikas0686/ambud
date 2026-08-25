@@ -32,18 +32,20 @@ const shutdownTimeout = 10 * time.Second
 func main() {
 	listenAddr := flag.String("listen", ":8081", "address to listen on")
 	dbDSN := flag.String("db-dsn", "postgres://ambud:devpassword@localhost:5432/ambud?sslmode=disable", "PostgreSQL connection string")
+	heartbeatTimeout := flag.Duration("heartbeat-timeout", api.DefaultHeartbeatTimeout,
+		"how long a node can go without heartbeating before it's reported offline")
 	flag.Parse()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	if err := mainErr(*listenAddr, *dbDSN, logger); err != nil {
+	if err := mainErr(*listenAddr, *dbDSN, *heartbeatTimeout, logger); err != nil {
 		logger.Error("ambud-controlplane exited with error", "error", err)
 		os.Exit(1)
 	}
 }
 
-func mainErr(listenAddr, dbDSN string, logger *slog.Logger) error {
+func mainErr(listenAddr, dbDSN string, heartbeatTimeout time.Duration, logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -53,17 +55,17 @@ func mainErr(listenAddr, dbDSN string, logger *slog.Logger) error {
 	}
 	defer st.Close()
 
-	return run(ctx, st, listenAddr, logger)
+	return run(ctx, st, listenAddr, heartbeatTimeout, logger)
 }
 
 // run starts the HTTP server and blocks until ctx is cancelled
 // (graceful shutdown) or the server fails outright. It takes an
 // api.Store rather than opening one itself so it can be tested against
 // a fake store — same pattern as cmd/ambud-agent's run.
-func run(ctx context.Context, st api.Store, listenAddr string, logger *slog.Logger) error {
+func run(ctx context.Context, st api.Store, listenAddr string, heartbeatTimeout time.Duration, logger *slog.Logger) error {
 	httpServer := &http.Server{
 		Addr:              listenAddr,
-		Handler:           api.NewServer(st, logger),
+		Handler:           api.NewServer(st, heartbeatTimeout, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

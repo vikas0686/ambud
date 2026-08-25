@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Ambud Control Plane API
-  version: '0.3.0'
+  version: '0.4.0'
   description: |
     The ambud-controlplane REST API — node join-token issuance,
     registration, and heartbeats, plus workload creation and listing.
@@ -298,6 +298,15 @@ components:
           format: uuid
         name:
           type: string
+        status:
+          type: string
+          enum: [online, offline]
+          description: >-
+            Computed by the control plane at request time from
+            last_heartbeat_at and its --heartbeat-timeout (default 15s)
+            — never stored, so always current as of this response. A
+            node that has never heartbeated is "offline", not a third
+            "unknown" state.
         created_at:
           type: string
           format: date-time

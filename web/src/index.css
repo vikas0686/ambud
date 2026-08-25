@@ -154,14 +154,16 @@ th {
   font-size: 0.8rem;
 }
 
-.state-running {
+.state-running,
+.state-online {
   background: color-mix(in srgb, var(--ambud-success) 20%, transparent);
   color: var(--ambud-success);
 }
 
 .state-stopped,
 .state-unknown,
-.state-pending {
+.state-pending,
+.state-offline {
   background: color-mix(in srgb, var(--ambud-muted) 20%, transparent);
   color: var(--ambud-muted);
 }

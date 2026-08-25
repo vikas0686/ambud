@@ -17,6 +17,7 @@ func TestNodeListCmd(t *testing.T) {
 		nodes: []apitypes.NodeStatus{
 			{
 				Name:            "node-1",
+				Status:          apitypes.NodeOnline,
 				LastHeartbeatAt: &heartbeat,
 				Resources:       apitypes.Resources{CPUCores: 4, CPUUsedPercent: 12.5, MemUsedBytes: 100, MemTotalBytes: 1000},
 			},
@@ -31,7 +32,7 @@ func TestNodeListCmd(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, want := range []string{"node-1", "ago", "4", "12.5"} {
+	for _, want := range []string{"node-1", "online", "ago", "4", "12.5"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q; got:\n%s", want, got)
 		}
@@ -40,7 +41,7 @@ func TestNodeListCmd(t *testing.T) {
 
 func TestNodeListCmd_NeverHeartbeat(t *testing.T) {
 	cp := &fakeControlPlane{
-		nodes: []apitypes.NodeStatus{{Name: "node-1"}},
+		nodes: []apitypes.NodeStatus{{Name: "node-1", Status: apitypes.NodeOffline}},
 	}
 	cmd := newNodeListCmd(fakeControlPlaneFactory(cp))
 
@@ -49,8 +50,12 @@ func TestNodeListCmd_NeverHeartbeat(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v, want nil", err)
 	}
-	if !strings.Contains(out.String(), "never") {
-		t.Errorf("output = %q, want it to show \"never\" for a node with no heartbeat yet", out.String())
+	got := out.String()
+	if !strings.Contains(got, "never") {
+		t.Errorf("output = %q, want it to show \"never\" for a node with no heartbeat yet", got)
+	}
+	if !strings.Contains(got, "offline") {
+		t.Errorf("output = %q, want it to show \"offline\" for a node that has never heartbeated", got)
 	}
 }
 

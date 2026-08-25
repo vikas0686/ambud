@@ -48,7 +48,7 @@ func newTestControlPlaneServer(t *testing.T) (*httptest.Server, *store.Store) {
 	t.Cleanup(st.Close)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	srv := httptest.NewServer(api.NewServer(st, logger))
+	srv := httptest.NewServer(api.NewServer(st, api.DefaultHeartbeatTimeout, logger))
 	t.Cleanup(srv.Close)
 
 	return srv, st

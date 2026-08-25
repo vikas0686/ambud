@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/vikas0686/ambud/internal/apitypes"
 	"github.com/vikas0686/ambud/internal/controlplane/store"
@@ -52,17 +53,19 @@ func (h *handlers) listNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := time.Now()
 	resp := apitypes.ListNodesResponse{Nodes: make([]apitypes.NodeStatus, 0, len(nodes))}
 	for _, n := range nodes {
-		resp.Nodes = append(resp.Nodes, toNodeStatus(n))
+		resp.Nodes = append(resp.Nodes, toNodeStatus(n, h.heartbeatTimeout, now))
 	}
 	httputil.WriteJSON(w, http.StatusOK, resp)
 }
 
-func toNodeStatus(n store.Node) apitypes.NodeStatus {
+func toNodeStatus(n store.Node, heartbeatTimeout time.Duration, now time.Time) apitypes.NodeStatus {
 	return apitypes.NodeStatus{
 		ID:              n.ID.String(),
 		Name:            n.Name,
+		Status:          nodeState(n.LastHeartbeatAt, heartbeatTimeout, now),
 		CreatedAt:       n.CreatedAt,
 		LastHeartbeatAt: n.LastHeartbeatAt,
 		Resources: apitypes.Resources{
@@ -74,6 +77,22 @@ func toNodeStatus(n store.Node) apitypes.NodeStatus {
 			DiskUsedBytes:  n.DiskUsedBytes,
 		},
 	}
+}
+
+// nodeState classifies a node as online/offline as of now, given when
+// it last heartbeated and how long it's allowed to go without one. A
+// node that has never heartbeated (lastHeartbeatAt == nil) is offline,
+// not some third "unknown" state — from an operator's point of view,
+// "never checked in" and "stopped checking in" call for the same
+// attention.
+func nodeState(lastHeartbeatAt *time.Time, heartbeatTimeout time.Duration, now time.Time) apitypes.NodeState {
+	if lastHeartbeatAt == nil {
+		return apitypes.NodeOffline
+	}
+	if now.Sub(*lastHeartbeatAt) > heartbeatTimeout {
+		return apitypes.NodeOffline
+	}
+	return apitypes.NodeOnline
 }
 
 // bearerToken extracts the token from an "Authorization: Bearer <token>"

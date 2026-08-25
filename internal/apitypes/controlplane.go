@@ -54,16 +54,31 @@ type HeartbeatResponse struct {
 }
 
 // NodeStatus is the wire representation of a registered node, as
-// returned by GET /v1/nodes. There's no online/offline field yet —
-// heartbeat-timeout classification is Phase 4 (docs/ROADMAP.md);
-// LastHeartbeatAt is the raw fact callers have today.
+// returned by GET /v1/nodes. Status is computed by the control plane
+// at request time from LastHeartbeatAt and its --heartbeat-timeout
+// (see docs/ROADMAP.md's Phase 4) — never stored, so it's always
+// current as of the response, not as of whenever it was last written.
 type NodeStatus struct {
 	ID              string     `json:"id"`
 	Name            string     `json:"name"`
+	Status          NodeState  `json:"status"`
 	CreatedAt       time.Time  `json:"created_at"`
 	LastHeartbeatAt *time.Time `json:"last_heartbeat_at,omitempty"`
 	Resources       Resources  `json:"resources"`
 }
+
+// NodeState is a node's computed reachability, from the control
+// plane's point of view.
+type NodeState string
+
+const (
+	// NodeOnline means the node heartbeated within the configured
+	// --heartbeat-timeout.
+	NodeOnline NodeState = "online"
+	// NodeOffline means it hasn't — including a node that has never
+	// heartbeated at all.
+	NodeOffline NodeState = "offline"
+)
 
 // ListNodesResponse is the JSON body for GET /v1/nodes.
 type ListNodesResponse struct {
