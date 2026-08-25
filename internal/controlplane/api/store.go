@@ -23,13 +23,13 @@ import (
 // cmd/ambud-controlplane.
 type Store interface {
 	CreateJoinToken(ctx context.Context) (string, error)
-	RegisterNode(ctx context.Context, joinToken, name string) (store.Node, string, error)
+	RegisterNode(ctx context.Context, joinToken, name, address string) (store.Node, string, error)
 	AuthenticateNode(ctx context.Context, credentialToken string) (store.Node, error)
 	GetNode(ctx context.Context, id uuid.UUID) (store.Node, error)
 	ListNodes(ctx context.Context) ([]store.Node, error)
-	UpdateNodeHeartbeat(ctx context.Context, nodeID uuid.UUID, r store.NodeResources) error
+	UpdateNodeHeartbeat(ctx context.Context, nodeID uuid.UUID, r store.NodeResources, address string) error
 
-	CreateWorkload(ctx context.Context, name, image string, nodeID uuid.UUID) (store.Workload, error)
+	CreateWorkload(ctx context.Context, name, image string, nodeID uuid.UUID, ports []store.PortMapping) (store.Workload, error)
 	ListWorkloads(ctx context.Context) ([]store.Workload, error)
 	ListWorkloadsForNode(ctx context.Context, nodeID uuid.UUID) ([]store.Workload, error)
 	UpdateWorkloadStatus(ctx context.Context, nodeID uuid.UUID, name, state string, pid int) error

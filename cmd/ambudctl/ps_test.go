@@ -42,7 +42,7 @@ func TestPrintStatuses_Empty(t *testing.T) {
 
 func TestPSCmd_ListsRunningContainers(t *testing.T) {
 	fake := runtime.NewFake()
-	if err := fake.Run(context.Background(), "web", "nginx:alpine"); err != nil {
+	if err := fake.Run(context.Background(), "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("seeding fake failed: %v", err)
 	}
 

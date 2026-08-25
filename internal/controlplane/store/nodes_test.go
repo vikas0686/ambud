@@ -18,7 +18,7 @@ func TestRegisterNode(t *testing.T) {
 			t.Fatalf("CreateJoinToken() error = %v", err)
 		}
 
-		node, credential, err := s.RegisterNode(ctx, token, "node-1")
+		node, credential, err := s.RegisterNode(ctx, token, "node-1", "")
 		if err != nil {
 			t.Fatalf("RegisterNode() error = %v, want nil", err)
 		}
@@ -37,7 +37,7 @@ func TestRegisterNode(t *testing.T) {
 	})
 
 	t.Run("invalid join token", func(t *testing.T) {
-		_, _, err := s.RegisterNode(ctx, "not-a-real-token", "node-x")
+		_, _, err := s.RegisterNode(ctx, "not-a-real-token", "node-x", "")
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("RegisterNode() error = %v, want wrapping ErrNotFound", err)
 		}
@@ -48,11 +48,11 @@ func TestRegisterNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateJoinToken() error = %v", err)
 		}
-		if _, _, registerErr := s.RegisterNode(ctx, token, "node-a"); registerErr != nil {
+		if _, _, registerErr := s.RegisterNode(ctx, token, "node-a", ""); registerErr != nil {
 			t.Fatalf("first RegisterNode() error = %v", registerErr)
 		}
 
-		_, _, err = s.RegisterNode(ctx, token, "node-b")
+		_, _, err = s.RegisterNode(ctx, token, "node-b", "")
 		if !errors.Is(err, ErrAlreadyExists) {
 			t.Errorf("second RegisterNode() error = %v, want wrapping ErrAlreadyExists", err)
 		}
@@ -60,12 +60,12 @@ func TestRegisterNode(t *testing.T) {
 
 	t.Run("duplicate name", func(t *testing.T) {
 		token1, _ := s.CreateJoinToken(ctx)
-		if _, _, err := s.RegisterNode(ctx, token1, "duplicate-name"); err != nil {
+		if _, _, err := s.RegisterNode(ctx, token1, "duplicate-name", ""); err != nil {
 			t.Fatalf("first RegisterNode() error = %v", err)
 		}
 
 		token2, _ := s.CreateJoinToken(ctx)
-		_, _, err := s.RegisterNode(ctx, token2, "duplicate-name")
+		_, _, err := s.RegisterNode(ctx, token2, "duplicate-name", "")
 		if !errors.Is(err, ErrAlreadyExists) {
 			t.Errorf("RegisterNode() with duplicate name error = %v, want wrapping ErrAlreadyExists", err)
 		}
@@ -85,7 +85,7 @@ func TestUpdateNodeHeartbeat(t *testing.T) {
 	ctx := context.Background()
 
 	token, _ := s.CreateJoinToken(ctx)
-	node, _, err := s.RegisterNode(ctx, token, "node-1")
+	node, _, err := s.RegisterNode(ctx, token, "node-1", "")
 	if err != nil {
 		t.Fatalf("RegisterNode() error = %v", err)
 	}
@@ -97,7 +97,7 @@ func TestUpdateNodeHeartbeat(t *testing.T) {
 		CPUCores: 8, CPUUsedPercent: 12.5,
 		MemTotalBytes: 1000, MemUsedBytes: 400,
 		DiskTotalBytes: 2000, DiskUsedBytes: 900,
-	})
+	}, "203.0.113.5")
 	if err != nil {
 		t.Fatalf("UpdateNodeHeartbeat() error = %v, want nil", err)
 	}
@@ -109,11 +109,14 @@ func TestUpdateNodeHeartbeat(t *testing.T) {
 	if got.CPUCores != 8 || got.MemUsedBytes != 400 || got.LastHeartbeatAt == nil {
 		t.Errorf("GetNode() after heartbeat = %+v, want CPUCores=8 MemUsedBytes=400 and a non-nil LastHeartbeatAt", got)
 	}
+	if got.Address != "203.0.113.5" {
+		t.Errorf("GetNode() after heartbeat Address = %q, want 203.0.113.5", got.Address)
+	}
 }
 
 func TestUpdateNodeHeartbeat_UnknownNode(t *testing.T) {
 	s := newTestStore(t)
-	err := s.UpdateNodeHeartbeat(context.Background(), randomUUID(t), NodeResources{})
+	err := s.UpdateNodeHeartbeat(context.Background(), randomUUID(t), NodeResources{}, "")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("UpdateNodeHeartbeat() error = %v, want wrapping ErrNotFound", err)
 	}
@@ -124,11 +127,11 @@ func TestListNodes(t *testing.T) {
 	ctx := context.Background()
 
 	token1, _ := s.CreateJoinToken(ctx)
-	if _, _, err := s.RegisterNode(ctx, token1, "node-1"); err != nil {
+	if _, _, err := s.RegisterNode(ctx, token1, "node-1", ""); err != nil {
 		t.Fatalf("RegisterNode(node-1) error = %v", err)
 	}
 	token2, _ := s.CreateJoinToken(ctx)
-	if _, _, err := s.RegisterNode(ctx, token2, "node-2"); err != nil {
+	if _, _, err := s.RegisterNode(ctx, token2, "node-2", ""); err != nil {
 		t.Fatalf("RegisterNode(node-2) error = %v", err)
 	}
 

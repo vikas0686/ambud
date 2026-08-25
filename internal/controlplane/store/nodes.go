@@ -27,6 +27,11 @@ type Node struct {
 	DiskUsedBytes   uint64
 	CreatedAt       time.Time
 	LastHeartbeatAt *time.Time
+	// Address is the host/IP this node last registered or heartbeated
+	// from — captured server-side from the request, not self-reported
+	// by the agent (see docs/ROADMAP.md's Phase 6). Empty until the
+	// node's first successful registration.
+	Address string
 }
 
 // NodeResources is the subset of a heartbeat that updates a node's
@@ -67,7 +72,7 @@ func hashToken(token string) string {
 // Consuming the join token and creating the node happen in one
 // transaction so a crash mid-registration can't leave a token marked
 // used with no corresponding node, or vice versa.
-func (s *Store) RegisterNode(ctx context.Context, joinToken, name string) (Node, string, error) {
+func (s *Store) RegisterNode(ctx context.Context, joinToken, name, address string) (Node, string, error) {
 	credToken, credHash, err := newCredential()
 	if err != nil {
 		return Node{}, "", err
@@ -96,11 +101,11 @@ func (s *Store) RegisterNode(ctx context.Context, joinToken, name string) (Node,
 	id := uuid.New()
 	var node Node
 	err = tx.QueryRow(ctx,
-		`INSERT INTO nodes (id, name, credential_hash)
-		 VALUES ($1, $2, $3)
-		 RETURNING id, name, created_at`,
-		id, name, credHash,
-	).Scan(&node.ID, &node.Name, &node.CreatedAt)
+		`INSERT INTO nodes (id, name, credential_hash, address)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, name, created_at, address`,
+		id, name, credHash, address,
+	).Scan(&node.ID, &node.Name, &node.CreatedAt, &node.Address)
 	switch {
 	case isUniqueViolation(err):
 		return Node{}, "", fmt.Errorf("register node: name %q already taken: %w", name, ErrAlreadyExists)
@@ -131,7 +136,7 @@ func (s *Store) AuthenticateNode(ctx context.Context, credentialToken string) (N
 		`SELECT id, name, created_at, last_heartbeat_at,
 		        cpu_cores, cpu_used_percent,
 		        mem_total_bytes, mem_used_bytes,
-		        disk_total_bytes, disk_used_bytes
+		        disk_total_bytes, disk_used_bytes, address
 		 FROM nodes WHERE credential_hash = $1`,
 		hashToken(credentialToken),
 	)
@@ -145,19 +150,22 @@ func (s *Store) AuthenticateNode(ctx context.Context, credentialToken string) (N
 	return node, nil
 }
 
-// UpdateNodeHeartbeat records a fresh resource sample and bumps
+// UpdateNodeHeartbeat records a fresh resource sample, refreshes the
+// node's last-known address (see Node.Address), and bumps
 // last_heartbeat_at to now.
-func (s *Store) UpdateNodeHeartbeat(ctx context.Context, nodeID uuid.UUID, r NodeResources) error {
+func (s *Store) UpdateNodeHeartbeat(ctx context.Context, nodeID uuid.UUID, r NodeResources, address string) error {
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE nodes SET
 		   cpu_cores = $2, cpu_used_percent = $3,
 		   mem_total_bytes = $4, mem_used_bytes = $5,
 		   disk_total_bytes = $6, disk_used_bytes = $7,
+		   address = $8,
 		   last_heartbeat_at = now()
 		 WHERE id = $1`,
 		nodeID, r.CPUCores, r.CPUUsedPercent,
 		r.MemTotalBytes, r.MemUsedBytes,
 		r.DiskTotalBytes, r.DiskUsedBytes,
+		address,
 	)
 	if err != nil {
 		return fmt.Errorf("update node heartbeat: %w", err)
@@ -175,7 +183,7 @@ func (s *Store) ListNodes(ctx context.Context) ([]Node, error) {
 		`SELECT id, name, created_at, last_heartbeat_at,
 		        cpu_cores, cpu_used_percent,
 		        mem_total_bytes, mem_used_bytes,
-		        disk_total_bytes, disk_used_bytes
+		        disk_total_bytes, disk_used_bytes, address
 		 FROM nodes ORDER BY created_at DESC`,
 	)
 	if err != nil {
@@ -203,7 +211,7 @@ func (s *Store) GetNode(ctx context.Context, id uuid.UUID) (Node, error) {
 		`SELECT id, name, created_at, last_heartbeat_at,
 		        cpu_cores, cpu_used_percent,
 		        mem_total_bytes, mem_used_bytes,
-		        disk_total_bytes, disk_used_bytes
+		        disk_total_bytes, disk_used_bytes, address
 		 FROM nodes WHERE id = $1`,
 		id,
 	)
@@ -230,7 +238,7 @@ func scanNode(row rowScanner) (Node, error) {
 		&n.ID, &n.Name, &n.CreatedAt, &n.LastHeartbeatAt,
 		&n.CPUCores, &n.CPUUsedPercent,
 		&n.MemTotalBytes, &n.MemUsedBytes,
-		&n.DiskTotalBytes, &n.DiskUsedBytes,
+		&n.DiskTotalBytes, &n.DiskUsedBytes, &n.Address,
 	)
 	return n, err
 }

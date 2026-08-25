@@ -53,8 +53,8 @@ func (c *Client) Pull(ctx context.Context, image string) error {
 }
 
 // Run implements runtime.Runtime.
-func (c *Client) Run(ctx context.Context, name, image string) error {
-	req := apitypes.CreateContainerRequest{Name: name, Image: image}
+func (c *Client) Run(ctx context.Context, name, image string, ports []runtime.PortMapping) error {
+	req := apitypes.CreateContainerRequest{Name: name, Image: image, Ports: toAPIPorts(ports)}
 	return c.doJSON(ctx, http.MethodPost, "/v1/containers", req, nil)
 }
 
@@ -78,9 +78,37 @@ func (c *Client) List(ctx context.Context) ([]runtime.ContainerStatus, error) {
 			Image: s.Image,
 			State: runtime.State(s.State),
 			PID:   s.PID,
+			Ports: fromAPIPorts(s.Ports),
 		})
 	}
 	return statuses, nil
+}
+
+// toAPIPorts and fromAPIPorts convert between internal/runtime's
+// PortMapping and apitypes' identical-shaped wire type — kept as two
+// separate types (rather than one shared across packages) so the wire
+// contract can't accidentally change just because the runtime
+// package's internals do; see apitypes' package doc.
+func toAPIPorts(ports []runtime.PortMapping) []apitypes.PortMapping {
+	if len(ports) == 0 {
+		return nil
+	}
+	out := make([]apitypes.PortMapping, len(ports))
+	for i, p := range ports {
+		out[i] = apitypes.PortMapping{ContainerPort: p.ContainerPort, HostPort: p.HostPort, Protocol: p.Protocol}
+	}
+	return out
+}
+
+func fromAPIPorts(ports []apitypes.PortMapping) []runtime.PortMapping {
+	if len(ports) == 0 {
+		return nil
+	}
+	out := make([]runtime.PortMapping, len(ports))
+	for i, p := range ports {
+		out[i] = runtime.PortMapping{ContainerPort: p.ContainerPort, HostPort: p.HostPort, Protocol: p.Protocol}
+	}
+	return out
 }
 
 // Close implements runtime.Runtime. It's a no-op: Client holds no

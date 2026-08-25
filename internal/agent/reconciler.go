@@ -152,7 +152,7 @@ func (r *Reconciler) reconcile(ctx context.Context, current []runtime.ContainerS
 		}
 
 		r.logger.Info("reconcile: starting desired workload", "name", wl.Name, "image", wl.Image)
-		if err := r.rt.Run(ctx, wl.Name, wl.Image); err != nil {
+		if err := r.rt.Run(ctx, wl.Name, wl.Image, fromAPIPorts(wl.Ports)); err != nil {
 			r.logger.Error("reconcile: start workload failed", "name", wl.Name, "error", err)
 		}
 	}

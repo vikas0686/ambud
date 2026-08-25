@@ -48,7 +48,7 @@ func (h *handlers) heartbeat(w http.ResponseWriter, r *http.Request) {
 		MemUsedBytes:   req.Resources.MemUsedBytes,
 		DiskTotalBytes: req.Resources.DiskTotalBytes,
 		DiskUsedBytes:  req.Resources.DiskUsedBytes,
-	}); updateErr != nil {
+	}, remoteHost(r)); updateErr != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, updateErr.Error())
 		return
 	}
@@ -68,7 +68,36 @@ func (h *handlers) heartbeat(w http.ResponseWriter, r *http.Request) {
 
 	resp := apitypes.HeartbeatResponse{Workloads: make([]apitypes.WorkloadSpec, 0, len(workloads))}
 	for _, wl := range workloads {
-		resp.Workloads = append(resp.Workloads, apitypes.WorkloadSpec{Name: wl.Name, Image: wl.Image})
+		resp.Workloads = append(resp.Workloads, apitypes.WorkloadSpec{Name: wl.Name, Image: wl.Image, Ports: toAPIPorts(wl.Ports)})
 	}
 	httputil.WriteJSON(w, http.StatusOK, resp)
+}
+
+// toAPIPorts converts the store's PortMapping into apitypes' wire
+// type — kept separate so the wire contract can't accidentally change
+// just because the store package's internals do.
+func toAPIPorts(ports []store.PortMapping) []apitypes.PortMapping {
+	if len(ports) == 0 {
+		return nil
+	}
+	out := make([]apitypes.PortMapping, len(ports))
+	for i, p := range ports {
+		out[i] = apitypes.PortMapping{
+			ContainerPort: uint16(p.ContainerPort), //nolint:gosec // ports are validated 1-65535 at store insert time (see cmd/ambudctl's parsePortNumber and the DB layer that wrote them)
+			HostPort:      uint16(p.HostPort),      //nolint:gosec // same as above
+			Protocol:      p.Protocol,
+		}
+	}
+	return out
+}
+
+func fromAPIPorts(ports []apitypes.PortMapping) []store.PortMapping {
+	if len(ports) == 0 {
+		return nil
+	}
+	out := make([]store.PortMapping, len(ports))
+	for i, p := range ports {
+		out[i] = store.PortMapping{ContainerPort: int(p.ContainerPort), HostPort: int(p.HostPort), Protocol: p.Protocol}
+	}
+	return out
 }

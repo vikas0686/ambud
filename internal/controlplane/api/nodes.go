@@ -5,6 +5,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -34,7 +35,7 @@ func (h *handlers) registerNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	node, credential, err := h.store.RegisterNode(r.Context(), req.JoinToken, req.Name)
+	node, credential, err := h.store.RegisterNode(r.Context(), req.JoinToken, req.Name, remoteHost(r))
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -68,6 +69,7 @@ func toNodeStatus(n store.Node, heartbeatTimeout time.Duration, now time.Time) a
 		Status:          nodeState(n.LastHeartbeatAt, heartbeatTimeout, now),
 		CreatedAt:       n.CreatedAt,
 		LastHeartbeatAt: n.LastHeartbeatAt,
+		Address:         n.Address,
 		Resources: apitypes.Resources{
 			CPUCores:       n.CPUCores,
 			CPUUsedPercent: n.CPUUsedPercent,
@@ -95,6 +97,21 @@ func nodeState(lastHeartbeatAt *time.Time, heartbeatTimeout time.Duration, now t
 	return apitypes.NodeOnline
 }
 
+// remoteHost returns the calling client's host/IP, without its
+// ephemeral source port — the address a node registers or heartbeats
+// from is captured this way (server-side, from the actual TCP peer)
+// rather than trusted from anything the agent claims about itself, see
+// docs/ROADMAP.md's Phase 6. Falls back to the raw RemoteAddr if it
+// isn't in host:port form, which shouldn't happen for a real
+// net/http request but is harmless either way.
+func remoteHost(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
 // bearerToken extracts the token from an "Authorization: Bearer <token>"
 // header.
 func bearerToken(r *http.Request) (string, bool) {
@@ -111,7 +128,7 @@ func bearerToken(r *http.Request) (string, bool) {
 // for internal/runtime errors.
 func writeStoreError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, store.ErrAlreadyExists):
+	case errors.Is(err, store.ErrAlreadyExists), errors.Is(err, store.ErrPortConflict):
 		httputil.WriteError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, store.ErrNotFound):
 		httputil.WriteError(w, http.StatusNotFound, err.Error())

@@ -159,6 +159,45 @@ available and more robust; containerd is also the lower-level component
 Docker itself is built on, so talking to it directly avoids depending on
 the Docker daemon's own extra layer.
 
+### Why not build our own networking
+
+**Decision:** Container networking (Phase 6) is the CNI bridge +
+portmap plugins (`github.com/containerd/go-cni`), the same mechanism
+nerdctl and Kubernetes use — not a hand-rolled iptables/nftables layer,
+and not a custom userspace packet forwarder.
+
+Driving containerd directly (rather than through the CRI shim — see
+above) means Ambud gets no networking for free: a container created via
+the native client starts in an isolated network namespace with only
+loopback, full stop. Building the equivalent of what CNI's bridge
+plugin does — a Linux bridge, veth pairs, IPAM, NAT, host-port DNAT —
+by hand would mean reimplementing a well-understood, already-correct
+piece of infrastructure for no benefit; the actual hard problem in this
+space (cross-node overlay networking) is explicitly out of scope for
+Phase 6 in the first place (see `ROADMAP.md`). CNI's plugin model also
+means the only Ambud-specific code is a thin Go wrapper (`go-cni`) and
+a bundled default config (`internal/runtime/network.go`) — the
+namespace/bridge/NAT mechanics themselves are upstream, audited code.
+
+Each container gets its own named, persistent network namespace,
+created with `ip netns add` and referenced by a stable path — not a
+namespace derived from the container's process PID
+(`/proc/<pid>/ns/net`). A PID-derived path stops resolving the instant
+the process exits, which is exactly when crash-cleanup needs it most;
+a named namespace tears down the same way whether the container
+stopped cleanly, crashed, or never started.
+
+**Alternative considered:** nerdctl's own approach, which sets up CNI
+networking via an OCI runtime prestart hook (an internal `nerdctl
+internal oci-hook` self-exec invoked by the runtime at precise
+container-creation lifecycle timing). Rejected as more machinery than
+Ambud's much narrower single-default-network use case needs — nerdctl's
+hook-based design exists to support multiple networks and plugins
+chosen per-container at `nerdctl run` time, a flexibility Phase 6 has no
+requirement for. Setting up networking directly in `Run()`, before the
+task starts, is simpler and gives the same correctness guarantee (no
+window where the container is running but unreachable).
+
 ### Why not start with Kubernetes
 
 **Decision:** Ambud does not use, embed, or expose a Kubernetes-

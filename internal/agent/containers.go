@@ -23,7 +23,8 @@ func (h *handlers) createContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.rt.Run(r.Context(), req.Name, req.Image); err != nil {
+	ports := fromAPIPorts(req.Ports)
+	if err := h.rt.Run(r.Context(), req.Name, req.Image, ports); err != nil {
 		writeRuntimeError(w, err)
 		return
 	}
@@ -32,6 +33,7 @@ func (h *handlers) createContainer(w http.ResponseWriter, r *http.Request) {
 		Name:  req.Name,
 		Image: req.Image,
 		State: string(runtime.StateRunning),
+		Ports: req.Ports,
 	})
 }
 
@@ -91,7 +93,7 @@ func (h *handlers) restartContainer(w http.ResponseWriter, r *http.Request) {
 		writeRuntimeError(w, err)
 		return
 	}
-	if err := h.rt.Run(r.Context(), name, st.Image); err != nil {
+	if err := h.rt.Run(r.Context(), name, st.Image, st.Ports); err != nil {
 		writeRuntimeError(w, err)
 		return
 	}
@@ -100,6 +102,7 @@ func (h *handlers) restartContainer(w http.ResponseWriter, r *http.Request) {
 		Name:  name,
 		Image: st.Image,
 		State: string(runtime.StateRunning),
+		Ports: toAPIPorts(st.Ports),
 	})
 }
 
@@ -148,13 +151,42 @@ func writeRuntimeError(w http.ResponseWriter, err error) {
 }
 
 func toAPIStatus(st runtime.ContainerStatus) apitypes.ContainerStatus {
-	return apitypes.ContainerStatus{Name: st.Name, Image: st.Image, State: string(st.State), PID: st.PID}
+	return apitypes.ContainerStatus{
+		Name: st.Name, Image: st.Image, State: string(st.State), PID: st.PID,
+		Ports: toAPIPorts(st.Ports),
+	}
 }
 
 func toAPIStatuses(statuses []runtime.ContainerStatus) []apitypes.ContainerStatus {
 	out := make([]apitypes.ContainerStatus, 0, len(statuses))
 	for _, st := range statuses {
 		out = append(out, toAPIStatus(st))
+	}
+	return out
+}
+
+// toAPIPorts and fromAPIPorts convert between internal/runtime's
+// PortMapping and apitypes' identical-shaped wire type — kept separate
+// so the wire contract can't accidentally change just because the
+// runtime package's internals do; see apitypes' package doc.
+func toAPIPorts(ports []runtime.PortMapping) []apitypes.PortMapping {
+	if len(ports) == 0 {
+		return nil
+	}
+	out := make([]apitypes.PortMapping, len(ports))
+	for i, p := range ports {
+		out[i] = apitypes.PortMapping{ContainerPort: p.ContainerPort, HostPort: p.HostPort, Protocol: p.Protocol}
+	}
+	return out
+}
+
+func fromAPIPorts(ports []apitypes.PortMapping) []runtime.PortMapping {
+	if len(ports) == 0 {
+		return nil
+	}
+	out := make([]runtime.PortMapping, len(ports))
+	for i, p := range ports {
+		out[i] = runtime.PortMapping{ContainerPort: p.ContainerPort, HostPort: p.HostPort, Protocol: p.Protocol}
 	}
 	return out
 }

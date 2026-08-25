@@ -36,6 +36,11 @@ var ErrNotFound = errors.New("store: not found")
 // token already used).
 var ErrAlreadyExists = errors.New("store: already exists")
 
+// ErrPortConflict is returned by CreateWorkload when a requested host
+// port is already claimed by another workload on the same node — see
+// the workload_ports table's unique index in migrations/0002_networking.up.sql.
+var ErrPortConflict = errors.New("store: host port already in use on this node")
+
 // Store is the control plane's PostgreSQL-backed store. The zero value
 // is not usable — construct one with Open.
 type Store struct {

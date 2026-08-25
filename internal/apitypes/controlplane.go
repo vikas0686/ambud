@@ -40,8 +40,9 @@ type HeartbeatRequest struct {
 // enough to call Runtime.Run) — anything richer belongs to later
 // phases (resource requests in Phase 5, volumes in Phase 7, ...).
 type WorkloadSpec struct {
-	Name  string `json:"name"`
-	Image string `json:"image"`
+	Name  string        `json:"name"`
+	Image string        `json:"image"`
+	Ports []PortMapping `json:"ports,omitempty"`
 }
 
 // HeartbeatResponse is the JSON body of a heartbeat reply: the full
@@ -65,6 +66,12 @@ type NodeStatus struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	LastHeartbeatAt *time.Time `json:"last_heartbeat_at,omitempty"`
 	Resources       Resources  `json:"resources"`
+	// Address is the host/IP the node last registered or heartbeated
+	// from, captured server-side (not self-reported) — see
+	// docs/ROADMAP.md's Phase 6. Empty if the node has never
+	// registered/heartbeated, which shouldn't happen in practice since
+	// registration always sets it.
+	Address string `json:"address,omitempty"`
 }
 
 // NodeState is a node's computed reachability, from the control
@@ -91,9 +98,10 @@ type ListNodesResponse struct {
 // otherwise — there's no scheduler yet (Phase 5), so ambiguity is
 // rejected rather than guessed at.
 type CreateWorkloadRequest struct {
-	Name   string `json:"name"`
-	Image  string `json:"image"`
-	NodeID string `json:"node_id,omitempty"`
+	Name   string        `json:"name"`
+	Image  string        `json:"image"`
+	NodeID string        `json:"node_id,omitempty"`
+	Ports  []PortMapping `json:"ports,omitempty"`
 }
 
 // WorkloadStatus is the wire representation of a workload, as returned
@@ -107,6 +115,14 @@ type WorkloadStatus struct {
 	State     string    `json:"state"`
 	PID       uint32    `json:"pid,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+
+	Ports []PortMapping `json:"ports,omitempty"`
+	// NodeAddress is the node's Address (see NodeStatus) at the time of
+	// the response — combined with a PortMapping's HostPort, this is
+	// the reachable "nodeIP:hostPort" address for the workload (see
+	// docs/ROADMAP.md's Phase 6). Empty if the node has no known
+	// address yet.
+	NodeAddress string `json:"node_address,omitempty"`
 }
 
 // ListWorkloadsResponse is the JSON body for GET /v1/workloads.

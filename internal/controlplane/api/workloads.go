@@ -32,20 +32,19 @@ func (h *handlers) createWorkload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wl, err := h.store.CreateWorkload(r.Context(), req.Name, req.Image, nodeID)
+	wl, err := h.store.CreateWorkload(r.Context(), req.Name, req.Image, nodeID, fromAPIPorts(req.Ports))
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusCreated, apitypes.WorkloadStatus{
-		ID:        wl.ID.String(),
-		Name:      wl.Name,
-		Image:     wl.Image,
-		NodeID:    wl.NodeID.String(),
-		State:     wl.State,
-		CreatedAt: wl.CreatedAt,
-	})
+	node, err := h.store.GetNode(r.Context(), nodeID)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusCreated, toWorkloadStatus(wl, node.Name, node.Address))
 }
 
 // resolveTargetNode implements Phase 3/4's "no scheduler yet" rule
@@ -90,27 +89,30 @@ func (h *handlers) listWorkloads(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	nodeNames := make(map[uuid.UUID]string, len(nodes))
+	nodes2 := make(map[uuid.UUID]store.Node, len(nodes))
 	for _, n := range nodes {
-		nodeNames[n.ID] = n.Name
+		nodes2[n.ID] = n
 	}
 
 	resp := apitypes.ListWorkloadsResponse{Workloads: make([]apitypes.WorkloadStatus, 0, len(workloads))}
 	for _, wl := range workloads {
-		resp.Workloads = append(resp.Workloads, toWorkloadStatus(wl, nodeNames[wl.NodeID]))
+		node := nodes2[wl.NodeID]
+		resp.Workloads = append(resp.Workloads, toWorkloadStatus(wl, node.Name, node.Address))
 	}
 	httputil.WriteJSON(w, http.StatusOK, resp)
 }
 
-func toWorkloadStatus(wl store.Workload, nodeName string) apitypes.WorkloadStatus {
+func toWorkloadStatus(wl store.Workload, nodeName, nodeAddress string) apitypes.WorkloadStatus {
 	return apitypes.WorkloadStatus{
-		ID:        wl.ID.String(),
-		Name:      wl.Name,
-		Image:     wl.Image,
-		NodeID:    wl.NodeID.String(),
-		NodeName:  nodeName,
-		State:     wl.State,
-		PID:       uint32(wl.PID), //nolint:gosec // PIDs are process IDs, never negative or larger than uint32 in practice
-		CreatedAt: wl.CreatedAt,
+		ID:          wl.ID.String(),
+		Name:        wl.Name,
+		Image:       wl.Image,
+		NodeID:      wl.NodeID.String(),
+		NodeName:    nodeName,
+		State:       wl.State,
+		PID:         uint32(wl.PID), //nolint:gosec // PIDs are process IDs, never negative or larger than uint32 in practice
+		CreatedAt:   wl.CreatedAt,
+		Ports:       toAPIPorts(wl.Ports),
+		NodeAddress: nodeAddress,
 	}
 }

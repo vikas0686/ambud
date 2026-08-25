@@ -38,6 +38,9 @@ type ContainerStatus struct {
 	// PID is the container's init process ID on the host, or 0 if the
 	// container has no running task.
 	PID uint32
+	// Ports are the container's host-port mappings, as given to Run —
+	// see docs/ROADMAP.md's Phase 6. Empty if none were requested.
+	Ports []PortMapping
 }
 
 // ErrNotFound is returned when a named container does not exist.
@@ -58,9 +61,11 @@ type Runtime interface {
 	Pull(ctx context.Context, image string) error
 
 	// Run pulls image if needed, creates a container named name from
-	// it, and starts it. It returns an error wrapping ErrAlreadyExists
-	// if a container with that name already exists.
-	Run(ctx context.Context, name, image string) error
+	// it, and starts it with the given host-port mappings (nil/empty
+	// for none — see docs/ROADMAP.md's Phase 6). It returns an error
+	// wrapping ErrAlreadyExists if a container with that name already
+	// exists.
+	Run(ctx context.Context, name, image string, ports []PortMapping) error
 
 	// Stop signals the named container to terminate, waits for it to
 	// exit (escalating to SIGKILL if it does not exit within a short

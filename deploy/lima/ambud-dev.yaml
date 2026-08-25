@@ -56,6 +56,20 @@ provision:
         apt-get install -y -qq gcc
       fi
 
+      # CNI plugin binaries (bridge, portmap, ...) that internal/runtime's
+      # container networking needs — see docs/ROADMAP.md's Phase 6 and
+      # internal/runtime/network.go. Ambud writes its own CNI conflist
+      # into /etc/cni/net.d itself on first agent startup; only the
+      # plugin binaries need provisioning here.
+      CNI_PLUGINS_VERSION="v1.9.1"
+      if [ ! -x /opt/cni/bin/bridge ] || ! /opt/cni/bin/bridge 2>&1 | grep -q "${CNI_PLUGINS_VERSION}"; then
+        curl -fsSL -o /tmp/cni-plugins.tgz \
+          "https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGINS_VERSION}/cni-plugins-linux-${GOARCH}-${CNI_PLUGINS_VERSION}.tgz"
+        install -d -m 755 /opt/cni/bin
+        tar -C /opt/cni/bin -xzf /tmp/cni-plugins.tgz
+        rm -f /tmp/cni-plugins.tgz
+      fi
+
       install -d -m 755 /etc/profile.d
       cat > /etc/profile.d/ambud-go.sh <<'EOF'
       export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin

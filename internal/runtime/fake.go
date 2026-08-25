@@ -46,7 +46,7 @@ func (f *Fake) Pull(_ context.Context, image string) error {
 }
 
 // Run implements Runtime.
-func (f *Fake) Run(ctx context.Context, name, image string) error {
+func (f *Fake) Run(ctx context.Context, name, image string, ports []PortMapping) error {
 	if err := f.Pull(ctx, image); err != nil {
 		return err
 	}
@@ -62,6 +62,7 @@ func (f *Fake) Run(ctx context.Context, name, image string) error {
 		Image: image,
 		State: StateRunning,
 		PID:   1,
+		Ports: ports,
 	}
 	return nil
 }

@@ -78,7 +78,7 @@ func TestRunCmd_ExplicitNameOverridesDerived(t *testing.T) {
 
 func TestRunCmd_AlreadyExistsSurfacesAsError(t *testing.T) {
 	fake := runtime.NewFake()
-	if err := fake.Run(context.Background(), "nginx", "nginx:alpine"); err != nil {
+	if err := fake.Run(context.Background(), "nginx", "nginx:alpine", nil); err != nil {
 		t.Fatalf("seeding fake failed: %v", err)
 	}
 

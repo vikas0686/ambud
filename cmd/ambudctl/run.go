@@ -11,6 +11,7 @@ import (
 
 func newRunCmd(newRuntime runtimeFactory) *cobra.Command {
 	var name string
+	var portSpecs []string
 
 	cmd := &cobra.Command{
 		Use:   "run IMAGE",
@@ -28,13 +29,18 @@ func newRunCmd(newRuntime runtimeFactory) *cobra.Command {
 				containerName = defaultContainerName(image)
 			}
 
+			ports, err := parsePortSpecs(portSpecs)
+			if err != nil {
+				return err
+			}
+
 			rt, err := newRuntime()
 			if err != nil {
 				return fmt.Errorf("connect to runtime: %w", err)
 			}
 			defer func() { _ = rt.Close() }()
 
-			if runErr := rt.Run(cmd.Context(), containerName, image); runErr != nil {
+			if runErr := rt.Run(cmd.Context(), containerName, image, ports); runErr != nil {
 				return fmt.Errorf("run %s: %w", containerName, runErr)
 			}
 
@@ -44,6 +50,8 @@ func newRunCmd(newRuntime runtimeFactory) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "container name (default: derived from the image name)")
+	cmd.Flags().StringArrayVar(&portSpecs, "port", nil,
+		"publish a container port to the host, as hostPort:containerPort[/protocol] (repeatable)")
 	return cmd
 }
 

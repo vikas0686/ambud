@@ -12,7 +12,7 @@ func TestFake_RunListStop(t *testing.T) {
 	ctx := context.Background()
 	f := NewFake()
 
-	if err := f.Run(ctx, "web", "nginx:alpine"); err != nil {
+	if err := f.Run(ctx, "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("Run() = %v, want nil", err)
 	}
 
@@ -42,7 +42,7 @@ func TestFake_RunListStop(t *testing.T) {
 	}
 
 	// And a name freed by Stop can be reused immediately.
-	if err := f.Run(ctx, "web", "nginx:alpine"); err != nil {
+	if err := f.Run(ctx, "web", "nginx:alpine", nil); err != nil {
 		t.Errorf("Run() after Stop = %v, want nil (name should be free again)", err)
 	}
 }
@@ -51,11 +51,11 @@ func TestFake_RunDuplicateNameFails(t *testing.T) {
 	ctx := context.Background()
 	f := NewFake()
 
-	if err := f.Run(ctx, "web", "nginx:alpine"); err != nil {
+	if err := f.Run(ctx, "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("first Run() = %v, want nil", err)
 	}
 
-	err := f.Run(ctx, "web", "nginx:alpine")
+	err := f.Run(ctx, "web", "nginx:alpine", nil)
 	if !errors.Is(err, ErrAlreadyExists) {
 		t.Errorf("second Run() error = %v, want wrapping ErrAlreadyExists", err)
 	}
@@ -73,7 +73,7 @@ func TestFake_RunPropagatesPullErr(t *testing.T) {
 	wantErr := errors.New("registry unreachable")
 	f.PullErr = wantErr
 
-	err := f.Run(context.Background(), "web", "nginx:alpine")
+	err := f.Run(context.Background(), "web", "nginx:alpine", nil)
 	if !errors.Is(err, wantErr) {
 		t.Errorf("Run() error = %v, want wrapping %v", err, wantErr)
 	}

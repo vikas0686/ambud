@@ -61,7 +61,7 @@ func (f *fakeStore) CreateJoinToken(_ context.Context) (string, error) {
 	return token, nil
 }
 
-func (f *fakeStore) RegisterNode(_ context.Context, joinToken, name string) (store.Node, string, error) {
+func (f *fakeStore) RegisterNode(_ context.Context, joinToken, name, address string) (store.Node, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -79,7 +79,7 @@ func (f *fakeStore) RegisterNode(_ context.Context, joinToken, name string) (sto
 	}
 
 	credential := randomToken()
-	node := store.Node{ID: uuid.New(), Name: name, CreatedAt: time.Now()}
+	node := store.Node{ID: uuid.New(), Name: name, CreatedAt: time.Now(), Address: address}
 	f.nodes[node.ID] = node
 	f.joinTokens[hashOf(joinToken)] = true
 	f.credentials[node.ID] = hashOf(credential)
@@ -122,7 +122,7 @@ func (f *fakeStore) ListNodes(_ context.Context) ([]store.Node, error) {
 	return nodes, nil
 }
 
-func (f *fakeStore) UpdateNodeHeartbeat(_ context.Context, nodeID uuid.UUID, r store.NodeResources) error {
+func (f *fakeStore) UpdateNodeHeartbeat(_ context.Context, nodeID uuid.UUID, r store.NodeResources, address string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -136,13 +136,14 @@ func (f *fakeStore) UpdateNodeHeartbeat(_ context.Context, nodeID uuid.UUID, r s
 	n.MemUsedBytes = r.MemUsedBytes
 	n.DiskTotalBytes = r.DiskTotalBytes
 	n.DiskUsedBytes = r.DiskUsedBytes
+	n.Address = address
 	now := time.Now()
 	n.LastHeartbeatAt = &now
 	f.nodes[nodeID] = n
 	return nil
 }
 
-func (f *fakeStore) CreateWorkload(_ context.Context, name, image string, nodeID uuid.UUID) (store.Workload, error) {
+func (f *fakeStore) CreateWorkload(_ context.Context, name, image string, nodeID uuid.UUID, ports []store.PortMapping) (store.Workload, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -154,11 +155,23 @@ func (f *fakeStore) CreateWorkload(_ context.Context, name, image string, nodeID
 			return store.Workload{}, fmt.Errorf("name %q already taken: %w", name, store.ErrAlreadyExists)
 		}
 	}
+	for _, p := range ports {
+		for _, w := range f.workloads {
+			if w.NodeID != nodeID {
+				continue
+			}
+			for _, existing := range w.Ports {
+				if existing.HostPort == p.HostPort && existing.Protocol == p.Protocol {
+					return store.Workload{}, fmt.Errorf("host port %d/%s on node %s: %w", p.HostPort, p.Protocol, nodeID, store.ErrPortConflict)
+				}
+			}
+		}
+	}
 
 	now := time.Now()
 	w := store.Workload{
 		ID: uuid.New(), Name: name, Image: image, NodeID: nodeID,
-		State: "pending", CreatedAt: now, UpdatedAt: now,
+		State: "pending", CreatedAt: now, UpdatedAt: now, Ports: ports,
 	}
 	f.workloads[w.ID] = w
 	return w, nil

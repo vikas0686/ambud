@@ -12,6 +12,7 @@ import (
 
 func newDeployCmd(cp controlPlaneFactory) *cobra.Command {
 	var name, nodeID string
+	var portSpecs []string
 
 	cmd := &cobra.Command{
 		Use:   "deploy IMAGE",
@@ -33,13 +34,18 @@ or "ambudctl node list" shortly after to see it running.`,
 				workloadName = defaultContainerName(image)
 			}
 
+			ports, err := parsePortSpecs(portSpecs)
+			if err != nil {
+				return err
+			}
+
 			client, err := cp()
 			if err != nil {
 				return fmt.Errorf("connect to control plane: %w", err)
 			}
 
 			w, err := client.CreateWorkload(cmd.Context(), apitypes.CreateWorkloadRequest{
-				Name: workloadName, Image: image, NodeID: nodeID,
+				Name: workloadName, Image: image, NodeID: nodeID, Ports: toAPIPortMappings(ports),
 			})
 			if err != nil {
 				return fmt.Errorf("deploy %s: %w", workloadName, err)
@@ -52,5 +58,7 @@ or "ambudctl node list" shortly after to see it running.`,
 
 	cmd.Flags().StringVar(&name, "name", "", "workload name (default: derived from the image name)")
 	cmd.Flags().StringVar(&nodeID, "node", "", "target node ID (default: the only registered node, if there's exactly one)")
+	cmd.Flags().StringArrayVar(&portSpecs, "port", nil,
+		"publish a container port to the host, as hostPort:containerPort[/protocol] (repeatable)")
 	return cmd
 }

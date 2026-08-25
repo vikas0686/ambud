@@ -67,7 +67,7 @@ func newNodeGenerateJoinTokenCmd(cp controlPlaneFactory) *cobra.Command {
 func printNodes(w io.Writer, nodes []apitypes.NodeStatus) error {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 
-	if _, err := fmt.Fprintln(tw, "NAME\tSTATUS\tLAST HEARTBEAT\tCPU CORES\tCPU %\tMEM USED\tMEM TOTAL"); err != nil {
+	if _, err := fmt.Fprintln(tw, "NAME\tSTATUS\tADDRESS\tLAST HEARTBEAT\tCPU CORES\tCPU %\tMEM USED\tMEM TOTAL"); err != nil {
 		return err
 	}
 	for _, n := range nodes {
@@ -75,8 +75,12 @@ func printNodes(w io.Writer, nodes []apitypes.NodeStatus) error {
 		if n.LastHeartbeatAt != nil {
 			lastHeartbeat = time.Since(*n.LastHeartbeatAt).Round(time.Second).String() + " ago"
 		}
-		_, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%.1f\t%d\t%d\n",
-			n.Name, n.Status, lastHeartbeat, n.Resources.CPUCores, n.Resources.CPUUsedPercent,
+		address := n.Address
+		if address == "" {
+			address = "-"
+		}
+		_, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%.1f\t%d\t%d\n",
+			n.Name, n.Status, address, lastHeartbeat, n.Resources.CPUCores, n.Resources.CPUUsedPercent,
 			n.Resources.MemUsedBytes, n.Resources.MemTotalBytes)
 		if err != nil {
 			return err

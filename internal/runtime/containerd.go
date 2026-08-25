@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/containerd/containerd/v2/pkg/namespaces"
 	"github.com/containerd/containerd/v2/pkg/oci"
 	"github.com/containerd/errdefs"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 const (
@@ -33,25 +35,41 @@ const (
 	// defaultLogDir is where container stdout/stderr is written, since
 	// Run detaches rather than attaching to the caller's own stdio.
 	defaultLogDir = "/var/log/ambud/containers"
+
+	// portsLabel stores a container's port mappings as JSON, so List
+	// can report them back without Ambud needing a separate store of
+	// its own — containerd's container labels are already exactly the
+	// right place for this kind of small, container-scoped metadata.
+	portsLabel = "io.ambud.ports"
 )
 
 // Containerd is a Runtime backed by containerd's native Go client
 // (not the CRI shim — see docs/ADR/0001-initial-architecture.md for
 // why). It satisfies the Runtime interface defined in runtime.go.
 type Containerd struct {
-	client *containerd.Client
-	logDir string
+	client  *containerd.Client
+	logDir  string
+	network *network
 }
 
 var _ Runtime = (*Containerd)(nil)
 
-// New connects to containerd over its local Unix socket at socketPath.
+// New connects to containerd over its local Unix socket at socketPath
+// and prepares Ambud's CNI network (see network.go) for giving
+// containers real connectivity.
 func New(socketPath string) (*Containerd, error) {
 	client, err := containerd.New(socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("connect to containerd at %s: %w", socketPath, err)
 	}
-	return &Containerd{client: client, logDir: defaultLogDir}, nil
+
+	net, err := newNetwork()
+	if err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("init networking: %w", err)
+	}
+
+	return &Containerd{client: client, logDir: defaultLogDir, network: net}, nil
 }
 
 // Close releases the underlying containerd client connection.
@@ -74,7 +92,7 @@ func (c *Containerd) Pull(ctx context.Context, image string) error {
 }
 
 // Run implements Runtime.
-func (c *Containerd) Run(ctx context.Context, name, image string) error {
+func (c *Containerd) Run(ctx context.Context, name, image string, ports []PortMapping) error {
 	ctx = c.namespaced(ctx)
 
 	img, err := c.client.Pull(ctx, image, containerd.WithPullUnpack)
@@ -82,34 +100,64 @@ func (c *Containerd) Run(ctx context.Context, name, image string) error {
 		return fmt.Errorf("pull image %s: %w", image, err)
 	}
 
+	nsPath, err := createNetNS(ctx, name)
+	if err != nil {
+		return fmt.Errorf("create network namespace for %s: %w", name, err)
+	}
+
+	portsJSON, err := json.Marshal(ports)
+	if err != nil {
+		_ = deleteNetNS(ctx, name)
+		return fmt.Errorf("encode port mappings for %s: %w", name, err)
+	}
+
 	container, err := c.client.NewContainer(
 		ctx,
 		name,
 		containerd.WithNewSnapshot(name+"-snapshot", img),
-		containerd.WithNewSpec(oci.WithImageConfig(img)),
+		containerd.WithContainerLabels(map[string]string{portsLabel: string(portsJSON)}),
+		containerd.WithNewSpec(
+			oci.WithImageConfig(img),
+			oci.WithLinuxNamespace(specs.LinuxNamespace{Type: specs.NetworkNamespace, Path: nsPath}),
+		),
 	)
 	if err != nil {
+		_ = deleteNetNS(ctx, name)
 		if errdefs.IsAlreadyExists(err) {
 			return fmt.Errorf("create container %s: %w: %w", name, ErrAlreadyExists, err)
 		}
 		return fmt.Errorf("create container %s: %w", name, err)
 	}
 
-	if mkdirErr := os.MkdirAll(c.logDir, 0o750); mkdirErr != nil {
+	// CNI setup happens before the task starts, not after, so there's
+	// no window where the app is already running but unreachable.
+	if _, setupErr := c.network.setup(ctx, name, nsPath, ports); setupErr != nil {
 		_ = container.Delete(ctx, containerd.WithSnapshotCleanup)
+		_ = deleteNetNS(ctx, name)
+		return fmt.Errorf("set up networking for %s: %w", name, setupErr)
+	}
+
+	if mkdirErr := os.MkdirAll(c.logDir, 0o750); mkdirErr != nil {
+		_ = c.network.teardown(ctx, name, nsPath)
+		_ = container.Delete(ctx, containerd.WithSnapshotCleanup)
+		_ = deleteNetNS(ctx, name)
 		return fmt.Errorf("create log directory %s: %w", c.logDir, mkdirErr)
 	}
 	logPath := filepath.Join(c.logDir, name+".log")
 
 	task, err := container.NewTask(ctx, cio.LogFile(logPath))
 	if err != nil {
+		_ = c.network.teardown(ctx, name, nsPath)
 		_ = container.Delete(ctx, containerd.WithSnapshotCleanup)
+		_ = deleteNetNS(ctx, name)
 		return fmt.Errorf("create task for %s: %w", name, err)
 	}
 
 	if err := task.Start(ctx); err != nil {
 		_, _ = task.Delete(ctx)
+		_ = c.network.teardown(ctx, name, nsPath)
 		_ = container.Delete(ctx, containerd.WithSnapshotCleanup)
+		_ = deleteNetNS(ctx, name)
 		return fmt.Errorf("start task for %s: %w", name, err)
 	}
 
@@ -132,8 +180,8 @@ func (c *Containerd) Stop(ctx context.Context, name string) error {
 	if err != nil {
 		if errdefs.IsNotFound(err) {
 			// Container exists but has no running task: nothing to
-			// stop, just remove the (already-stopped) container record.
-			return containerDelete(ctx, container)
+			// stop, just clean up networking and the container record.
+			return c.cleanupContainer(ctx, name, container)
 		}
 		return fmt.Errorf("load task for %s: %w", name, err)
 	}
@@ -142,6 +190,22 @@ func (c *Containerd) Stop(ctx context.Context, name string) error {
 		return fmt.Errorf("stop task for %s: %w", name, err)
 	}
 
+	return c.cleanupContainer(ctx, name, container)
+}
+
+// cleanupContainer tears down networking (idempotent: safe even if
+// setup never completed, or already ran once — see network.go) and
+// removes the container record. The network namespace is named after
+// name, not derived from the task's PID, specifically so this works
+// the same way whether the task exited cleanly, crashed, or never
+// started at all.
+func (c *Containerd) cleanupContainer(ctx context.Context, name string, container containerd.Container) error {
+	if err := c.network.teardown(ctx, name, netnsPath(name)); err != nil {
+		return fmt.Errorf("tear down networking for %s: %w", name, err)
+	}
+	if err := deleteNetNS(ctx, name); err != nil {
+		return fmt.Errorf("delete network namespace for %s: %w", name, err)
+	}
 	return containerDelete(ctx, container)
 }
 
@@ -219,6 +283,7 @@ func containerStatus(ctx context.Context, ctr containerd.Container) (ContainerSt
 		Name:  ctr.ID(),
 		Image: info.Image,
 		State: StateUnknown,
+		Ports: decodePorts(info.Labels[portsLabel]),
 	}
 
 	task, err := ctr.Task(ctx, nil)
@@ -237,6 +302,22 @@ func containerStatus(ctx context.Context, ctr containerd.Container) (ContainerSt
 	}
 
 	return st, nil
+}
+
+// decodePorts parses the JSON written by Run into the ports label. A
+// missing or malformed label (e.g. a container created before Phase 6,
+// or by something other than Ambud) decodes to nil rather than an
+// error — port info is a nice-to-have on List, not something worth
+// failing the whole call over.
+func decodePorts(label string) []PortMapping {
+	if label == "" {
+		return nil
+	}
+	var ports []PortMapping
+	if err := json.Unmarshal([]byte(label), &ports); err != nil {
+		return nil
+	}
+	return ports
 }
 
 func mapProcessStatus(s containerd.ProcessStatus) State {

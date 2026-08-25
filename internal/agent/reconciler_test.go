@@ -185,7 +185,7 @@ func TestReconciler_RestartsCrashedWorkload(t *testing.T) {
 		Workloads: []apitypes.WorkloadSpec{{Name: "web", Image: "nginx:alpine"}},
 	}
 	rt := runtime.NewFake()
-	if err := rt.Run(context.Background(), "web", "nginx:alpine"); err != nil {
+	if err := rt.Run(context.Background(), "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("seed rt.Run() error = %v", err)
 	}
 	// Simulate the container's process dying on its own — the record
@@ -222,7 +222,7 @@ func TestReconciler_DoesNotRestartAlreadyRunningWorkload(t *testing.T) {
 		Workloads: []apitypes.WorkloadSpec{{Name: "web", Image: "nginx:alpine"}},
 	}
 	rt := runtime.NewFake()
-	if err := rt.Run(context.Background(), "web", "nginx:alpine"); err != nil {
+	if err := rt.Run(context.Background(), "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("seed rt.Run() error = %v", err)
 	}
 	collector := NewResourceCollector(time.Hour, "/")

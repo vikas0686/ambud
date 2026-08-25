@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Ambud Control Plane API
-  version: '0.4.0'
+  version: '0.5.0'
   description: |
     The ambud-controlplane REST API — node join-token issuance,
     registration, and heartbeats, plus workload creation and listing.
@@ -217,6 +217,22 @@ components:
         disk_used_percent:
           type: number
 
+    PortMapping:
+      type: object
+      description: >-
+        A container-to-host port mapping, matching `docker run -p`
+        semantics — see docs/ROADMAP.md's Phase 6.
+      required: [container_port, host_port]
+      properties:
+        container_port:
+          type: integer
+        host_port:
+          type: integer
+        protocol:
+          type: string
+          enum: [tcp, udp]
+          default: tcp
+
     ContainerStatus:
       type: object
       properties:
@@ -229,6 +245,10 @@ components:
           enum: [running, stopped, unknown]
         pid:
           type: integer
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortMapping'
 
     CreateJoinTokenResponse:
       type: object
@@ -281,6 +301,10 @@ components:
           type: string
         image:
           type: string
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortMapping'
 
     HeartbeatResponse:
       type: object
@@ -317,6 +341,13 @@ components:
           description: Absent/null if the node has never heartbeated.
         resources:
           $ref: '#/components/schemas/Resources'
+        address:
+          type: string
+          description: >-
+            The host/IP this node last registered or heartbeated from,
+            captured server-side (not self-reported) — see
+            docs/ROADMAP.md's Phase 6. Empty if the node has never
+            registered/heartbeated.
 
     ListNodesResponse:
       type: object
@@ -338,6 +369,10 @@ components:
           type: string
           format: uuid
           description: Optional — see this endpoint's description.
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortMapping'
 
     WorkloadStatus:
       type: object
@@ -361,6 +396,17 @@ components:
         created_at:
           type: string
           format: date-time
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortMapping'
+        node_address:
+          type: string
+          description: >-
+            The node's address at the time of this response — combined
+            with a PortMapping's host_port, this is the reachable
+            "nodeAddress:hostPort" for the workload. Empty if the node
+            has no known address yet.
 
     ListWorkloadsResponse:
       type: object

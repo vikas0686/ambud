@@ -21,7 +21,7 @@ import (
 type fakeStore struct{}
 
 func (fakeStore) CreateJoinToken(context.Context) (string, error) { return "", nil }
-func (fakeStore) RegisterNode(context.Context, string, string) (store.Node, string, error) {
+func (fakeStore) RegisterNode(context.Context, string, string, string) (store.Node, string, error) {
 	return store.Node{}, "", nil
 }
 func (fakeStore) AuthenticateNode(context.Context, string) (store.Node, error) {
@@ -29,10 +29,10 @@ func (fakeStore) AuthenticateNode(context.Context, string) (store.Node, error) {
 }
 func (fakeStore) GetNode(context.Context, uuid.UUID) (store.Node, error) { return store.Node{}, nil }
 func (fakeStore) ListNodes(context.Context) ([]store.Node, error)        { return nil, nil }
-func (fakeStore) UpdateNodeHeartbeat(context.Context, uuid.UUID, store.NodeResources) error {
+func (fakeStore) UpdateNodeHeartbeat(context.Context, uuid.UUID, store.NodeResources, string) error {
 	return nil
 }
-func (fakeStore) CreateWorkload(context.Context, string, string, uuid.UUID) (store.Workload, error) {
+func (fakeStore) CreateWorkload(context.Context, string, string, uuid.UUID, []store.PortMapping) (store.Workload, error) {
 	return store.Workload{}, nil
 }
 func (fakeStore) ListWorkloads(context.Context) ([]store.Workload, error) { return nil, nil }

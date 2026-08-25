@@ -133,6 +133,28 @@ default `--listen`. Image references must be fully qualified
 client, unlike the `docker` CLI, doesn't implicitly expand short Docker
 Hub names.
 
+## Container networking (Phase 6)
+
+Containers get real connectivity — a bridge, an IP, outbound NAT, and
+(with `--port`) inbound host-port forwarding — via the CNI bridge +
+portmap plugins (see `internal/runtime/network.go` and the ADR's "why
+not build our own networking" reasoning). `deploy/lima/ambud-dev.yaml`
+provisions the plugin binaries into `/opt/cni/bin` automatically; on
+any other Linux box, install them yourself (e.g. from
+[containernetworking/plugins releases](https://github.com/containernetworking/plugins/releases),
+matching the version pinned in that Lima config). `ambud-agent` writes
+its own default CNI config to `/etc/cni/net.d/10-ambud.conflist` on
+first startup if nothing is there yet — no separate config step.
+
+`run`/`deploy` take a repeatable `--port hostPort:containerPort[/protocol]`
+flag, matching `docker run -p` syntax minus the host-IP prefix (Ambud
+binds every mapping to all interfaces):
+
+```sh
+./bin/ambudctl --agent http://127.0.0.1:8080 run docker.io/library/nginx:alpine --port 8080:80
+curl http://127.0.0.1:8080/   # reaches nginx inside the container
+```
+
 ## Running Postgres locally
 
 ```bash

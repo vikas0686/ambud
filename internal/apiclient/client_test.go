@@ -36,7 +36,7 @@ func TestClient_RunListStop(t *testing.T) {
 	client, fake := newTestAgent(t)
 	ctx := context.Background()
 
-	if err := client.Run(ctx, "web", "nginx:alpine"); err != nil {
+	if err := client.Run(ctx, "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 
@@ -67,11 +67,11 @@ func TestClient_RunDuplicateNameReturnsAlreadyExists(t *testing.T) {
 	client, _ := newTestAgent(t)
 	ctx := context.Background()
 
-	if err := client.Run(ctx, "web", "nginx:alpine"); err != nil {
+	if err := client.Run(ctx, "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("first Run() error = %v, want nil", err)
 	}
 
-	err := client.Run(ctx, "web", "nginx:alpine")
+	err := client.Run(ctx, "web", "nginx:alpine", nil)
 	if !errors.Is(err, runtime.ErrAlreadyExists) {
 		t.Errorf("second Run() error = %v, want wrapping runtime.ErrAlreadyExists", err)
 	}

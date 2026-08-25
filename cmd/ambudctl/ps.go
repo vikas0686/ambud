@@ -38,11 +38,12 @@ func newPSCmd(newRuntime runtimeFactory) *cobra.Command {
 func printStatuses(w io.Writer, statuses []runtime.ContainerStatus) error {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 
-	if _, err := fmt.Fprintln(tw, "NAME\tIMAGE\tSTATE\tPID"); err != nil {
+	if _, err := fmt.Fprintln(tw, "NAME\tIMAGE\tSTATE\tPID\tPORTS"); err != nil {
 		return err
 	}
 	for _, st := range statuses {
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\n", st.Name, st.Image, st.State, st.PID); err != nil {
+		_, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n", st.Name, st.Image, st.State, st.PID, formatRuntimePorts(st.Ports))
+		if err != nil {
 			return err
 		}
 	}

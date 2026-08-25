@@ -49,7 +49,7 @@ func TestCreateContainer(t *testing.T) {
 			name: "name collision",
 			body: `{"name":"web","image":"nginx:alpine"}`,
 			seed: func(f *runtime.Fake) {
-				_ = f.Run(context.Background(), "web", "nginx:alpine")
+				_ = f.Run(context.Background(), "web", "nginx:alpine", nil)
 			},
 			wantStatus: http.StatusConflict,
 		},
@@ -86,7 +86,7 @@ func TestCreateContainer(t *testing.T) {
 
 func TestListContainers(t *testing.T) {
 	fake := runtime.NewFake()
-	if err := fake.Run(context.Background(), "web", "nginx:alpine"); err != nil {
+	if err := fake.Run(context.Background(), "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("seeding fake failed: %v", err)
 	}
 	srv := testServer(t, fake)
@@ -110,7 +110,7 @@ func TestListContainers(t *testing.T) {
 
 func TestGetContainer(t *testing.T) {
 	fake := runtime.NewFake()
-	if err := fake.Run(context.Background(), "web", "nginx:alpine"); err != nil {
+	if err := fake.Run(context.Background(), "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("seeding fake failed: %v", err)
 	}
 	srv := testServer(t, fake)
@@ -138,7 +138,7 @@ func TestGetContainer(t *testing.T) {
 
 func TestStopContainer(t *testing.T) {
 	fake := runtime.NewFake()
-	if err := fake.Run(context.Background(), "web", "nginx:alpine"); err != nil {
+	if err := fake.Run(context.Background(), "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("seeding fake failed: %v", err)
 	}
 	srv := testServer(t, fake)
@@ -166,7 +166,7 @@ func TestStopContainer(t *testing.T) {
 
 func TestRestartContainer(t *testing.T) {
 	fake := runtime.NewFake()
-	if err := fake.Run(context.Background(), "web", "nginx:alpine"); err != nil {
+	if err := fake.Run(context.Background(), "web", "nginx:alpine", nil); err != nil {
 		t.Fatalf("seeding fake failed: %v", err)
 	}
 	srv := testServer(t, fake)

@@ -10,10 +10,23 @@
 // docs/PROJECT_STRUCTURE.md.
 package apitypes
 
+// PortMapping maps a container port to a host port, matching `docker
+// run -p` semantics — see docs/ROADMAP.md's Phase 6. It mirrors
+// internal/runtime.PortMapping field for field but is defined
+// separately as this package's own wire contract, same as
+// ContainerStatus below.
+type PortMapping struct {
+	ContainerPort uint16 `json:"container_port"`
+	HostPort      uint16 `json:"host_port"`
+	// Protocol is "tcp" or "udp"; empty defaults to "tcp".
+	Protocol string `json:"protocol,omitempty"`
+}
+
 // CreateContainerRequest is the JSON body for POST /v1/containers.
 type CreateContainerRequest struct {
-	Name  string `json:"name"`
-	Image string `json:"image"`
+	Name  string        `json:"name"`
+	Image string        `json:"image"`
+	Ports []PortMapping `json:"ports,omitempty"`
 }
 
 // PullImageRequest is the JSON body for POST /v1/images/pull.
@@ -27,10 +40,11 @@ type PullImageRequest struct {
 // contract, and shouldn't change just because the runtime package's
 // internals do.
 type ContainerStatus struct {
-	Name  string `json:"name"`
-	Image string `json:"image"`
-	State string `json:"state"`
-	PID   uint32 `json:"pid,omitempty"`
+	Name  string        `json:"name"`
+	Image string        `json:"image"`
+	State string        `json:"state"`
+	PID   uint32        `json:"pid,omitempty"`
+	Ports []PortMapping `json:"ports,omitempty"`
 }
 
 // ListContainersResponse is the JSON body for GET /v1/containers.

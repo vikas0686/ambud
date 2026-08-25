@@ -1,0 +1,21 @@
+{
+  "cniVersion": "1.0.0",
+  "name": "ambud",
+  "plugins": [
+    {
+      "type": "bridge",
+      "bridge": "ambud0",
+      "isGateway": true,
+      "ipMasq": true,
+      "ipam": {
+        "type": "host-local",
+        "ranges": [[{ "subnet": "10.42.0.0/16" }]],
+        "routes": [{ "dst": "0.0.0.0/0" }]
+      }
+    },
+    {
+      "type": "portmap",
+      "capabilities": { "portMappings": true }
+    }
+  ]
+}

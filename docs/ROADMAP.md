@@ -394,7 +394,12 @@ explicit UI-parity bar the MVP is held to, not an optional stretch goal.
 
 ---
 
-## Phase 6 — Networking
+## Phase 6 — Networking ✅
+
+**Status: done**, built ahead of Phase 5 (scheduler) at the operator's
+request — deploys still target a node explicitly (`--node`) until
+Phase 5 lands; the MVP milestone is therefore still Phase 5's, not
+this one's.
 
 **Goal.** Make containers reachable — first from the host, later
 (optionally) from each other across nodes — without building a custom
@@ -413,30 +418,45 @@ combined. Ambud deliberately ships the 80%-useful, well-understood
 solution (host ports) first, and treats the overlay network as optional
 future work, not a blocker.
 
-**Technologies.** containerd/OCI runtime spec port mapping (or a thin
-iptables/nftables rule the agent manages, depending on how containerd's
-networking is configured), no new major dependency for the host-port
-case.
+**Technologies.** The CNI bridge + portmap plugins
+(`github.com/containerd/go-cni`), the same building blocks
+nerdctl/Kubernetes use — not a hand-rolled iptables/nftables layer. Each
+container gets its own named, persistent network namespace (`ip netns
+add`, not a PID-derived path) so teardown works the same whether the
+container stopped cleanly or crashed. See `internal/runtime/network.go`
+and the ADR's "why not build our own networking" reasoning.
 
 **Implementation tasks.**
-- Extend workload spec: `ports: [{container: 80, host: 8080}]`
-- Agent: apply the mapping when creating the container (via CNI bridge +
-  port-forward rule, or containerd's built-in networking, depending on
-  what Phase 1–2 set up — document the choice)
+- Extend workload spec: `ports: [{host_port: 8080, container_port: 80,
+  protocol: tcp}]` — `--port hostPort:containerPort[/protocol]` on
+  `ambudctl run`/`deploy`, matching `docker run -p` syntax minus the
+  host-IP prefix (every mapping binds to all interfaces)
+- Agent: apply the mapping when creating the container, via CNI bridge +
+  portmap, set up *before* the task starts so there's no window where
+  the app is running but unreachable
 - Surface the reachable address (`nodeIP:hostPort`) in `ambudctl ps` /
-  `node list` output, since the operator needs to know where to point a
-  browser or client
+  `node list` / `workloads list` output — the node's address is captured
+  server-side from the registration/heartbeat request's remote address,
+  not self-reported by the agent
 - Guard against host-port collisions on the same node (two workloads
-  can't claim the same host port) — surfaced as a scheduling constraint,
-  not just a runtime failure
+  can't claim the same host port) — enforced with a Postgres unique
+  index on `(node_id, host_port, protocol)` (`workload_ports` table),
+  not just checked in application code
 - **Stretch goal, not required for this phase:** a minimal name-based
   lookup (control plane records "workload X → nodeIP:port", `ambudctl
   resolve X` prints it) as a stepping stone toward real service
-  discovery, without building DNS or an overlay network
+  discovery, without building DNS or an overlay network — **not built**,
+  left for later
 
-**Expected outcome.** `ambudctl deploy nginx --port 80:8080` and then
+**Expected outcome.** `ambudctl deploy nginx --port 8080:80` and then
 `curl http://<node-ip>:8080` from another machine on the LAN actually
 reaches the container, regardless of which node the scheduler picked.
+Validated for real: on a Lima VM with real containerd, a container
+started with `--port 18080:80` was `curl`-reachable at
+`127.0.0.1:18080` from the host's own network namespace (i.e. genuinely
+outside the container's namespace, not just "CNI Setup() returned no
+error"), and the mapping stopped responding immediately after `stop`
+tore the namespace down.
 
 **Do NOT build yet.** No overlay/mesh network, no CNI plugin
 development, no service mesh, no cross-node container-to-container DNS.
