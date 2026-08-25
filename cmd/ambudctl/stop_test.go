@@ -29,9 +29,11 @@ func TestStopCmd_StopsRunningContainer(t *testing.T) {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 
+	// Stop removes the container entirely (matching Containerd.Stop),
+	// so it no longer appears in List.
 	statuses, _ := fake.List(context.Background())
-	if len(statuses) != 1 || statuses[0].State != runtime.StateStopped {
-		t.Errorf("List() = %+v, want web stopped", statuses)
+	if len(statuses) != 0 {
+		t.Errorf("List() after stop = %+v, want empty", statuses)
 	}
 }
 

@@ -18,9 +18,10 @@ all: fmt-check vet lint test build ## Run the Go check + build pipeline
 ci: fmt-check vet lint test-race build web-install web-format-check web-lint web-build ## Run everything CI runs, locally
 
 .PHONY: build
-build: ## Build the ambudctl binary into bin/
+build: ## Build ambudctl and ambud-agent into bin/
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ambudctl ./cmd/ambudctl
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ambud-agent ./cmd/ambud-agent
 
 .PHONY: test
 test: ## Run unit tests with coverage

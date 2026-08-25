@@ -13,8 +13,9 @@ plane that knows what's running where, a way to deploy containers to any
 machine in the fleet, and a dashboard to see it all. No Kubernetes cluster
 to babysit, no cloud bill.
 
-> **Status: Phase 1 — single-node prototype.** `ambudctl` drives real
-> containerd directly (`run`/`ps`/`stop`) — no agent, no control plane,
+> **Status: Phase 2 — node agent.** `ambud-agent` is a long-running
+> daemon exposing a local HTTP API (container lifecycle + resource
+> facts); `ambudctl` is now a pure HTTP client of it — no control plane,
 > no real UI yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
 > being built and in what order, and [`docs/MVP.md`](docs/MVP.md) for
 > the first real milestone.
@@ -96,7 +97,7 @@ version:
 |---|---|---|
 | 0 | Repo, tooling, CI scaffolding | ✅ done |
 | 1 | Single-node prototype (CLI drives containerd directly) | ✅ done |
-| 2 | Node agent (long-running service, local API) | ⬜ not started |
+| 2 | Node agent (long-running service, local API) | ✅ done |
 | 3 | Control plane + PostgreSQL (still one node) | ⬜ not started |
 | 4 | Second machine joins the cluster | ⬜ not started |
 | 5 | Container scheduling across nodes — **MVP** | ⬜ not started |
@@ -111,23 +112,28 @@ and does not include.
 
 ## Quick start
 
-`ambudctl` currently talks directly to a local containerd socket — no
-agent, no control plane yet (Phase 2 and Phase 3). It needs Linux; see
-[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for a one-command Lima VM
-if you're on macOS/Windows.
+`ambud-agent` drives containerd; `ambudctl` talks to the agent over
+HTTP — no control plane yet (Phase 3), so this is still one machine at
+a time. Needs Linux; see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
+for a one-command Lima VM if you're on macOS/Windows.
 
 ```sh
 git clone https://github.com/vikas0686/ambud.git
 cd ambud
 make build
-sudo ./bin/ambudctl run docker.io/library/nginx:alpine
-sudo ./bin/ambudctl ps
-sudo ./bin/ambudctl stop nginx
+
+# terminal 1
+sudo ./bin/ambud-agent --listen 127.0.0.1:8080
+
+# terminal 2
+./bin/ambudctl run docker.io/library/nginx:alpine
+./bin/ambudctl ps
+./bin/ambudctl stop nginx
 ```
 
-This section grows further once Phase 2/3 add the agent and control
-plane — deploying to a *fleet*, not just the local machine. For a full
-local dev environment (Postgres, containerd, the web dashboard), see
+This section grows further once Phase 3 adds the control plane —
+deploying to a *fleet*, not just one machine's agent. For a full local
+dev environment (Postgres, containerd, the web dashboard), see
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## Documentation

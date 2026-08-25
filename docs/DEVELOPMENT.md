@@ -106,24 +106,40 @@ within the last two Go releases) rather than pinning indefinitely —
 update `go.mod`'s `go` directive deliberately when bumping, not
 accidentally via toolchain auto-update.
 
-## Running ambudctl today (Phase 1)
+## Running ambudctl + ambud-agent today (Phase 2)
 
-As of Phase 1, `ambudctl` talks directly to a local containerd socket —
-there's no agent or control plane yet (those are Phase 2 and Phase 3;
-the sections below describe that *future* workflow). From inside the
+As of Phase 2, `ambudctl` talks to `ambud-agent` over HTTP — it no
+longer touches containerd directly (that was Phase 1's scaffolding).
+There's still no control plane (Phase 3; the "Running the control
+plane" / "Running an agent" sections below describe that *future*
+workflow with join tokens, `--controlplane`, etc.). From inside the
 Lima VM (or any Linux box with containerd running):
 
 ```sh
 cd /path/to/ambud   # same path as on the host, if using the Lima VM above
+go build -o bin/ambud-agent ./cmd/ambud-agent
 go build -o bin/ambudctl ./cmd/ambudctl
-sudo ./bin/ambudctl run docker.io/library/nginx:alpine
-sudo ./bin/ambudctl ps
-sudo ./bin/ambudctl stop nginx
+
+# terminal 1: the agent (needs root — containerd's socket is root:root)
+sudo ./bin/ambud-agent --listen 127.0.0.1:8080
+
+# terminal 2: ambudctl talks HTTP to it, no sudo needed
+./bin/ambudctl --agent http://127.0.0.1:8080 run docker.io/library/nginx:alpine
+./bin/ambudctl --agent http://127.0.0.1:8080 ps
+./bin/ambudctl --agent http://127.0.0.1:8080 stop nginx
+
+# resource facts (also used by the future scheduler — see docs/ROADMAP.md Phase 5)
+curl -s http://127.0.0.1:8080/v1/resources
 ```
 
-`sudo` is required because containerd's socket is `root:root` by
-default. `--socket` overrides the default socket path
-(`/run/containerd/containerd.sock`) if yours differs.
+`--agent` defaults to `http://localhost:8080`, matching the agent's
+default `--listen`. `--socket` (containerd's socket path) moved from
+`ambudctl` to `ambud-agent`, since the agent is now the only thing that
+talks to containerd — `ambudctl`'s only network target is the agent.
+
+Image references must be fully qualified (`docker.io/library/nginx:alpine`,
+not `nginx:alpine`) — containerd's client, unlike the `docker` CLI,
+doesn't implicitly expand short Docker Hub names.
 
 ## Running Postgres locally
 
@@ -149,10 +165,13 @@ go run ./cmd/ambud-controlplane \
   --listen :8081
 ```
 
-## Running an agent
+## Running an agent (once Phase 3 exists)
 
-The agent needs a real Linux environment with containerd running (see
-above). From that environment:
+This describes the *future* control-plane-connected agent workflow —
+for how to actually run `ambud-agent` today, see "Running ambudctl +
+ambud-agent today (Phase 2)" above; today's agent takes no
+`--controlplane` or `--join-token` flags. The agent needs a real Linux
+environment with containerd running (see above). From that environment:
 
 ```bash
 # one-time: generate a join token from the control plane

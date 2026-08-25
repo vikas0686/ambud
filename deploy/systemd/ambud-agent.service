@@ -1,0 +1,30 @@
+[Unit]
+Description=Ambud node agent
+Documentation=https://github.com/vikas0686/ambud/blob/main/docs/ARCHITECTURE.md
+After=network.target containerd.service
+Requires=containerd.service
+
+[Service]
+# ambudctl/ambud-agent aren't packaged yet (see docs/ROADMAP.md Phase 0's
+# "Do NOT build yet" list) — this assumes a binary built with `make build`
+# and copied to /usr/local/bin manually. Revisit this path once Phase 10
+# adds real packaging.
+ExecStart=/usr/local/bin/ambud-agent --listen 0.0.0.0:8080
+Restart=on-failure
+RestartSec=2s
+
+# containerd's socket is root:root by default (see docs/DEVELOPMENT.md)
+# — the agent needs to run as root until a dedicated service account
+# with socket access is set up, which is out of scope before Phase 10's
+# hardening pass.
+User=root
+
+# Baseline hardening that doesn't get in the way of talking to
+# containerd's socket or managing container logs under /var/log/ambud.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/ambud
+
+[Install]
+WantedBy=multi-user.target

@@ -31,12 +31,19 @@ func TestFake_RunListStop(t *testing.T) {
 		t.Fatalf("Stop() = %v, want nil", stopErr)
 	}
 
+	// Stop removes the container entirely (matching Containerd.Stop —
+	// see the Runtime.Stop doc comment), so it no longer appears in List.
 	statuses, err = f.List(ctx)
 	if err != nil {
 		t.Fatalf("List() after Stop error = %v, want nil", err)
 	}
-	if len(statuses) != 1 || statuses[0].State != StateStopped {
-		t.Errorf("List() after Stop = %+v, want state %q", statuses, StateStopped)
+	if len(statuses) != 0 {
+		t.Errorf("List() after Stop = %+v, want empty", statuses)
+	}
+
+	// And a name freed by Stop can be reused immediately.
+	if err := f.Run(ctx, "web", "nginx:alpine"); err != nil {
+		t.Errorf("Run() after Stop = %v, want nil (name should be free again)", err)
 	}
 }
 

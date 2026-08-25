@@ -71,13 +71,15 @@ func (f *Fake) Stop(_ context.Context, name string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	st, exists := f.containers[name]
-	if !exists {
+	if _, exists := f.containers[name]; !exists {
 		return fmt.Errorf("stop %s: %w", name, ErrNotFound)
 	}
-	st.State = StateStopped
-	st.PID = 0
-	f.containers[name] = st
+	// Matches Containerd.Stop: the container is fully removed, not just
+	// marked stopped — see the Runtime.Stop doc comment ("... and
+	// removes it"). A container reappearing as StateStopped in List()
+	// only happens if its task exited on its own (e.g. crashed) without
+	// Stop ever being called; Fake doesn't currently model that case.
+	delete(f.containers, name)
 	return nil
 }
 
