@@ -1,0 +1,66 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - revive
+    - gocritic
+    - gosec
+    - bodyclose
+    - noctx
+    - prealloc
+    - unconvert
+    - unparam
+    - misspell
+    - whitespace
+    - nolintlint
+    - copyloopvar
+    - errorlint
+    - goconst
+    - sqlclosecheck
+    - rowserrcheck
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+    govet:
+      enable:
+        - shadow
+    unparam:
+      check-exported: false
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+          - goconst
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/vikas0686/ambud
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

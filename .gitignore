@@ -1,0 +1,30 @@
+# Build artifacts
+/bin/
+*.exe
+*.test
+
+# Go
+*.out
+coverage.txt
+coverage.html
+
+# Web
+web/node_modules/
+web/dist/
+web/.vite/
+web/*.local
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Local dev overrides
+/deploy/compose/.env
