@@ -5,7 +5,7 @@ go 1.26.3
 require (
 	github.com/containerd/containerd/v2 v2.3.4
 	github.com/containerd/errdefs v1.0.0
-	github.com/containerd/go-cni v1.1.13
+	github.com/containerd/go-cni v1.1.14
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
