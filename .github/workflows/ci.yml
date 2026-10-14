@@ -79,7 +79,7 @@ jobs:
           git diff --exit-code -- go.mod go.sum
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: go-coverage
           path: coverage.out
